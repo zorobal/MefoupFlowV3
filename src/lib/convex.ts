@@ -6,19 +6,71 @@ import { SaaSClient, TenantDatabase } from '../types';
  * Service d'intégration Convex.dev pour Mefoup Flow ERP
  */
 
-const rawConvexUrl = ((import.meta as any).env?.VITE_CONVEX_URL as string) || '';
+const getInitialConvexUrl = (): string => {
+  const envUrl = ((import.meta as any).env?.VITE_CONVEX_URL as string) || '';
+  if (envUrl && envUrl.trim().length > 0 && !envUrl.includes('your-deployment-name')) {
+    return envUrl.trim();
+  }
+  try {
+    const saved = localStorage.getItem('mefoup_convex_url');
+    if (saved && saved.trim().length > 0) return saved.trim();
+  } catch (e) {}
+  return '';
+};
+
+const getInitialConvexSiteUrl = (): string => {
+  const envSite = ((import.meta as any).env?.VITE_CONVEX_SITE_URL as string) || '';
+  if (envSite && envSite.trim().length > 0 && !envSite.includes('your-deployment-name')) {
+    return envSite.trim();
+  }
+  try {
+    const saved = localStorage.getItem('mefoup_convex_site_url');
+    if (saved && saved.trim().length > 0) return saved.trim();
+  } catch (e) {}
+  const cloud = getInitialConvexUrl();
+  if (cloud.includes('.convex.cloud')) {
+    return cloud.replace('.convex.cloud', '.convex.site');
+  }
+  return '';
+};
+
+let currentConvexUrl: string = getInitialConvexUrl();
+let currentConvexSiteUrl: string = getInitialConvexSiteUrl();
 
 export const isConvexConfigured = (): boolean => {
+  const url = getConvexUrl();
   return (
-    typeof rawConvexUrl === 'string' &&
-    rawConvexUrl.trim().length > 0 &&
-    (rawConvexUrl.startsWith('https://') || rawConvexUrl.startsWith('http://')) &&
-    !rawConvexUrl.includes('your-deployment-name')
+    typeof url === 'string' &&
+    url.trim().length > 0 &&
+    (url.startsWith('https://') || url.startsWith('http://')) &&
+    !url.includes('your-deployment-name')
   );
 };
 
 export const getConvexUrl = (): string => {
-  return rawConvexUrl;
+  if (!currentConvexUrl) {
+    currentConvexUrl = getInitialConvexUrl();
+  }
+  return currentConvexUrl;
+};
+
+export const getConvexSiteUrl = (): string => {
+  if (!currentConvexSiteUrl) {
+    currentConvexSiteUrl = getInitialConvexSiteUrl();
+  }
+  return currentConvexSiteUrl;
+};
+
+export const saveConvexSettings = (cloudUrl: string, siteUrl?: string) => {
+  currentConvexUrl = cloudUrl.trim();
+  currentConvexSiteUrl = (siteUrl || (cloudUrl.includes('.convex.cloud') ? cloudUrl.replace('.convex.cloud', '.convex.site') : '')).trim();
+  try {
+    localStorage.setItem('mefoup_convex_url', currentConvexUrl);
+    localStorage.setItem('mefoup_convex_site_url', currentConvexSiteUrl);
+  } catch (e) {}
+  // Réinitialiser les clients pour prendre en compte la nouvelle URL
+  reactClientInstance = null;
+  httpClientInstance = null;
 };
 
 // Instance du client React (initialisée uniquement si configuré pour éviter les erreurs d'invalidation)
@@ -27,9 +79,10 @@ let httpClientInstance: ConvexHttpClient | null = null;
 
 export const getConvexReactClient = (): ConvexReactClient | null => {
   if (!isConvexConfigured()) return null;
+  const url = getConvexUrl();
   if (!reactClientInstance) {
     try {
-      reactClientInstance = new ConvexReactClient(rawConvexUrl);
+      reactClientInstance = new ConvexReactClient(url);
     } catch (e) {
       console.warn('[Convex] Erreur d initialisation du client React:', e);
       return null;
@@ -40,9 +93,10 @@ export const getConvexReactClient = (): ConvexReactClient | null => {
 
 export const getConvexHttpClient = (): ConvexHttpClient | null => {
   if (!isConvexConfigured()) return null;
+  const url = getConvexUrl();
   if (!httpClientInstance) {
     try {
-      httpClientInstance = new ConvexHttpClient(rawConvexUrl);
+      httpClientInstance = new ConvexHttpClient(url);
     } catch (e) {
       console.warn('[Convex] Erreur d initialisation du client HTTP:', e);
       return null;
@@ -64,9 +118,10 @@ export const ConvexSyncService = {
     }
 
     const start = performance.now();
+    const activeUrl = getConvexUrl();
     try {
       // Test de connectivité par requête ping HTTP vers le point d'accès Convex
-      const res = await fetch(`${rawConvexUrl.replace(/\/$/, '')}/api/version`, {
+      const res = await fetch(`${activeUrl.replace(/\/$/, '')}/api/version`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       }).catch(() => null);
@@ -84,7 +139,7 @@ export const ConvexSyncService = {
       // Si le endpoint version n'est pas exposé directement, un ping direct sur l'URL
       return {
         ok: true,
-        message: `Instance Convex joignable (${rawConvexUrl}).`,
+        message: `Instance Convex joignable (${activeUrl}).`,
         latencyMs: latency,
       };
     } catch (err: any) {

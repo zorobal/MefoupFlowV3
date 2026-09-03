@@ -6,7 +6,7 @@
 import React, { useState, useRef } from 'react';
 import { SaaSClient, SaaSLog, TenantDatabase, SubscriptionPlan, Utilisateur } from '../types';
 import { isSupabaseConfigured, supabase, SupabaseSyncService } from '../lib/supabase';
-import { isConvexConfigured, ConvexSyncService, getConvexUrl } from '../lib/convex';
+import { isConvexConfigured, ConvexSyncService, getConvexUrl, getConvexSiteUrl, saveConvexSettings } from '../lib/convex';
 import { getPreferredBackend, setPreferredBackend, BackendProviderType, LocalStorageAdapter, SupabaseAdapter, ConvexAdapter } from '../lib/databaseAdapter';
 import { sqlSchemaFull } from './full_schema_sql';
 import {
@@ -107,6 +107,10 @@ export default function SaaSAdmin({
   const [convexSyncMessage, setConvexSyncMessage] = useState('');
   const [convexTestResult, setConvexTestResult] = useState<{ ok?: boolean; message?: string; latencyMs?: number; running?: boolean } | null>(null);
   const [copiedConvexCode, setCopiedConvexCode] = useState(false);
+  const [convexCloudInput, setConvexCloudInput] = useState(() => getConvexUrl());
+  const [convexSiteInput, setConvexSiteInput] = useState(() => getConvexSiteUrl());
+  const [convexSavedNotice, setConvexSavedNotice] = useState(false);
+  const [copiedEnvSnippet, setCopiedEnvSnippet] = useState(false);
 
   // Main SaaS tab for full console layout
   const [saasMainTab, setSaasMainTab] = useState<'clients' | 'billing' | 'tickets' | 'maintenance' | 'telemetry' | 'supabase' | 'database'>('clients');
@@ -2310,40 +2314,101 @@ export default defineSchema({
                     </span>
                   </div>
 
-                  {/* Convex Connection Status */}
-                  <div className="p-4 rounded-xl border flex items-start gap-4 bg-slate-50">
-                    <div className="mt-1">
-                      {isConvexConfigured() ? (
-                        <div className="h-3.5 w-3.5 bg-emerald-500 rounded-full animate-pulse border border-emerald-300"></div>
-                      ) : (
-                        <div className="h-3.5 w-3.5 bg-amber-500 rounded-full border border-amber-300"></div>
-                      )}
-                    </div>
-                    <div className="space-y-1.5 flex-1">
-                      <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                        Statut Convex
+                  {/* Configuration des URLs Convex (Cloud URL & HTTP Actions URL) */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-black text-slate-800">Paramétrage des adresses Convex.dev</span>
+                        {isConvexConfigured() ? (
+                          <span className="text-[10px] bg-emerald-100 text-emerald-800 font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <span className="h-2 w-2 rounded-full bg-emerald-500"></span> Actif
+                          </span>
+                        ) : (
+                          <span className="text-[10px] bg-amber-100 text-amber-800 font-extrabold px-2 py-0.5 rounded-full">
+                            À configurer
+                          </span>
+                        )}
                       </div>
-                      {isConvexConfigured() ? (
-                        <div>
-                          <p className="text-xs text-emerald-700 font-extrabold flex items-center gap-1.5">
-                            ✓ URL Convex configurée
-                          </p>
-                          <p className="text-[10px] text-slate-500 font-mono mt-1 select-all break-all bg-white px-2 py-1 rounded border">
-                            {getConvexUrl()}
-                          </p>
-                        </div>
-                      ) : (
-                        <div>
-                          <p className="text-xs text-amber-600 font-extrabold">
-                            ⚠️ En attente d'initialisation Convex
-                          </p>
-                          <p className="text-[11px] text-slate-600 leading-relaxed mt-1">
-                            Pour lier votre instance Convex, lancez <code className="font-mono bg-white px-1.5 py-0.5 border rounded text-indigo-700">npx convex dev</code> dans votre terminal, puis vérifiez que <code className="font-mono bg-white px-1 py-0.5 border rounded text-indigo-700">VITE_CONVEX_URL</code> est renseignée dans <code className="font-mono bg-white px-1 py-0.5 border rounded">.env</code>.
-                          </p>
-                        </div>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const snippet = `VITE_CONVEX_URL="${convexCloudInput || 'https://coordinated-partridge-388.eu-west-1.convex.cloud'}"\nVITE_CONVEX_SITE_URL="${convexSiteInput || 'https://coordinated-partridge-388.eu-west-1.convex.site'}"`;
+                          navigator.clipboard.writeText(snippet);
+                          setCopiedEnvSnippet(true);
+                          setTimeout(() => setCopiedEnvSnippet(false), 2000);
+                        }}
+                        className="text-[11px] font-bold bg-white hover:bg-slate-100 text-slate-700 border px-2.5 py-1 rounded-lg transition flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Terminal className="h-3 w-3 text-indigo-600" />
+                        {copiedEnvSnippet ? 'Copié dans le presse-papier !' : 'Copier pour .env'}
+                      </button>
+                    </div>
 
-                      <div className="pt-2 flex flex-wrap gap-2">
+                    <div className="space-y-3">
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-[11px] font-black text-slate-700 flex items-center gap-1.5">
+                            <span className="h-2 w-2 rounded-full bg-indigo-600"></span>
+                            Cloud URL (Base de données temps réel / WebSocket)
+                          </label>
+                          <span className="text-[10px] font-mono text-indigo-600 font-bold">VITE_CONVEX_URL</span>
+                        </div>
+                        <input
+                          type="url"
+                          value={convexCloudInput}
+                          onChange={(e) => setConvexCloudInput(e.target.value)}
+                          placeholder="https://coordinated-partridge-388.eu-west-1.convex.cloud"
+                          className="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-lg px-3 py-2 text-xs font-mono text-slate-800 focus:outline-none"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-1">
+                          Utilisée pour les abonnements réactifs, requêtes, mutations et synchronisations des tables SaaS.
+                        </p>
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-[11px] font-black text-slate-700 flex items-center gap-1.5">
+                            <span className="h-2 w-2 rounded-full bg-amber-500"></span>
+                            HTTP Actions URL (Webhooks & API REST externes)
+                          </label>
+                          <span className="text-[10px] font-mono text-amber-600 font-bold">VITE_CONVEX_SITE_URL</span>
+                        </div>
+                        <input
+                          type="url"
+                          value={convexSiteInput}
+                          onChange={(e) => setConvexSiteInput(e.target.value)}
+                          placeholder="https://coordinated-partridge-388.eu-west-1.convex.site"
+                          className="w-full bg-white border border-slate-300 focus:border-amber-500 rounded-lg px-3 py-2 text-xs font-mono text-slate-800 focus:outline-none"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-1">
+                          Utilisée pour les points d'entrée HTTP, callbacks de paiement et webhooks tiers.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-200">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            saveConvexSettings(convexCloudInput, convexSiteInput);
+                            setConvexSavedNotice(true);
+                            setTimeout(() => setConvexSavedNotice(false), 3000);
+                            handleConvexTestConnection();
+                          }}
+                          className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-lg transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                        >
+                          <CheckCircle className="h-3.5 w-3.5" />
+                          Sauvegarder & Appliquer
+                        </button>
+                        {convexSavedNotice && (
+                          <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                            ✓ URLs enregistrées !
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
                         <button
                           type="button"
                           onClick={handleConvexTestConnection}
@@ -2351,7 +2416,7 @@ export default defineSchema({
                           className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 text-[11px] font-extrabold rounded-lg transition flex items-center gap-1.5 cursor-pointer"
                         >
                           <Activity className="h-3.5 w-3.5 text-indigo-600" />
-                          {convexTestResult?.running ? 'Test de latence...' : 'Tester la connectivité Convex'}
+                          {convexTestResult?.running ? 'Test en cours...' : 'Tester la connexion'}
                         </button>
                         {convexTestResult && !convexTestResult.running && (
                           <span
