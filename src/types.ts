@@ -74,22 +74,38 @@ export interface Champ {
   code: string; // e.g. REF-CMP-001
   nom: string;
   ville: string;
+  region?: string;
   localite: string;
   coordonneesGps: string;
+  superficieTotale?: number; // Surface globale acquise en hectares (ex: 50 ha)
+  statutJuridique?: 'Titre Foncier' | 'Bail Emphytéotique' | 'Cession Coutumière' | 'Attestation Villageoise' | 'Location Longue Durée';
+  numeroTitre?: string; // N° TF ou Référence cadastrale
+  dateAcquisition?: string;
+  coutAcquisition?: number; // Prix d'achat global en FCFA
+  coutAmenagement?: number; // Défrichage, bornage, nivellement en FCFA
+  responsableSite?: string;
+  notes?: string;
 }
 
 export interface Parcelle {
   id: string;
   idSite: string; // compatibility
-  idChamp?: string; // linked field (un champ a plusieurs parcelles, une parcelle appartient à un seul champ)
+  idChamp?: string; // linked field (un champ/terrain a plusieurs parcelles, une parcelle appartient à un seul champ/terrain)
   code: string;
   nom: string;
-  surface: number; // Hectares (superficie)
+  surface: number; // Hectares (superficie découpée)
   latitude: number;
   longitude: number;
   typeSol: string;
   ph: number;
   sourceEau: string;
+
+  // Vocation & Exploitation (Agricole vs Élevage / Pastorale)
+  vocation?: 'Agricole' | 'Pastorale' | 'Mixte' | 'Réserve / Jachère';
+  typeExploitation?: 'Culture Végétale' | 'Élevage / Pâturage' | 'Complexe Avicole/Porcin' | 'Agroforesterie' | 'Non Allouée';
+  troupeauAffecte?: string; // Nom ou ID du troupeau en pâturage
+  statutParcelle?: 'En Culture' | 'Pâturage Actif' | 'En Préparation' | 'En Jachère' | 'Repos';
+  dateDecoupage?: string;
 
   // Location / Lease Info (Information de base)
   locationStatus?: 'Propriété' | 'Location';

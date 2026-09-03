@@ -201,9 +201,57 @@ export const INITIAL_SITES_AGRICOLES: SiteAgricole[] = [
 ];
 
 export const INITIAL_CHAMPS: Champ[] = [
-  { id: 'champ-1', code: 'REF-CMP-001', nom: 'Champ Nord Obala', ville: 'Obala', localite: 'Secteur Maraîcher Nord', coordonneesGps: '4.1680, 11.5340' },
-  { id: 'champ-2', code: 'REF-CMP-002', nom: 'Champ Est Obala', ville: 'Obala', localite: 'Bananeraie Centrale', coordonneesGps: '4.1650, 11.5300' },
-  { id: 'champ-3', code: 'REF-CMP-003', nom: 'Champ Cacaoyère Ouest', ville: 'Mbouda', localite: 'Mbouda Ouest', coordonneesGps: '5.6291, 10.2530' }
+  {
+    id: 'champ-1',
+    code: 'TER-OBL-001',
+    nom: 'Domaine Agro-Pastoral de la Sanaga',
+    ville: 'Obala',
+    region: 'Centre',
+    localite: 'Axe Obala-Batchenga (Bordure Sanaga)',
+    coordonneesGps: '4.1680 N, 11.5340 E',
+    superficieTotale: 45.0, // 45 Hectares
+    statutJuridique: 'Titre Foncier',
+    numeroTitre: 'TF N° 18450/Lekié',
+    dateAcquisition: '2023-04-10',
+    coutAcquisition: 22500000, // 22.5M FCFA (500k/ha)
+    coutAmenagement: 4200000, // Bornage, défrichage, pistes
+    responsableSite: 'Jean-Pierre Ondoa',
+    notes: 'Terrain plat très fertile avec accès direct au fleuve Sanaga pour irrigation.'
+  },
+  {
+    id: 'champ-2',
+    code: 'TER-MBD-002',
+    nom: 'Concession Agricole des Hauts Plateaux',
+    ville: 'Mbouda',
+    region: 'Ouest',
+    localite: 'Secteur Ouest Bamboutos',
+    coordonneesGps: '5.6291 N, 10.2530 E',
+    superficieTotale: 80.0, // 80 Hectares
+    statutJuridique: 'Bail Emphytéotique',
+    numeroTitre: 'Bail Coopérative 30 ans N° 2022-09',
+    dateAcquisition: '2022-11-15',
+    coutAcquisition: 16000000,
+    coutAmenagement: 5800000,
+    responsableSite: 'Bertrand Fokou',
+    notes: 'Terres volcaniques riches, idéales pour caféiers, cacaoyers d\'ombrage et maraîchage tempéré.'
+  },
+  {
+    id: 'champ-3',
+    code: 'TER-BAF-003',
+    nom: 'Domaine d\'Élevage & Pâturages de Bafia',
+    ville: 'Bafia',
+    region: 'Centre',
+    localite: 'Secteur Mbam et Inoubou Nord',
+    coordonneesGps: '4.7500 N, 11.2333 E',
+    superficieTotale: 60.0, // 60 Hectares
+    statutJuridique: 'Cession Coutumière',
+    numeroTitre: 'Attestation Notariée C-2024/03',
+    dateAcquisition: '2024-02-20',
+    coutAcquisition: 15000000,
+    coutAmenagement: 3500000,
+    responsableSite: 'Dr. Amadou Diallo',
+    notes: 'Domaine dédié aux parcours pastoraux bovins et complexe d\'engraissement.'
+  }
 ];
 
 export const INITIAL_UTILISATEURS: Utilisateur[] = [
@@ -214,10 +262,103 @@ export const INITIAL_UTILISATEURS: Utilisateur[] = [
 ];
 
 export const INITIAL_PARCELLES: Parcelle[] = [
-  { id: 'par-1', idSite: 'site-1', idChamp: 'champ-1', code: 'REF-PRC-001', nom: 'Parcelle Nord-01 - Argileuse', surface: 12.5, latitude: 4.1680, longitude: 11.5340, typeSol: 'Sablo-argileux ferrallitique', ph: 6.2, sourceEau: 'Forage motopompe', expertValide: true, expertDescription: 'Sol bien drainé, excellent pour le maraîchage après fertilisation azotée de fond.' },
-  { id: 'par-2', idSite: 'site-1', idChamp: 'champ-1', code: 'REF-PRC-002', nom: 'Parcelle Nord-02 - Tomates', surface: 8.0, latitude: 4.1695, longitude: 11.5355, typeSol: 'Argilo-humifère', ph: 5.8, sourceEau: 'Rivière Sanaga dérivation', expertValide: true, expertDescription: 'Légère carence en potassium, apport d\'amendement potassique recommandé avant repiquage.' },
-  { id: 'par-3', idSite: 'site-2', idChamp: 'champ-2', code: 'REF-PRC-003', nom: 'Plantation Banane Est', surface: 35.0, latitude: 4.1650, longitude: 11.5300, typeSol: 'Volcanique humifère', ph: 6.5, sourceEau: 'Retenue eau colline', expertValide: true, expertDescription: 'Sol volcanique très riche, fort potentiel de rendement.' },
-  { id: 'par-4', idSite: 'site-3', idChamp: 'champ-3', code: 'REF-PRC-004', nom: 'Cacaoyère d’Ombrage Ouest', surface: 48.0, latitude: 5.6291, longitude: 10.2530, typeSol: 'Latéritique argilo-sableux', ph: 5.5, sourceEau: 'Précipitations naturelles', expertValide: false, expertDescription: 'Diagnostics en cours pour carences de fer et acidité.' }
+  {
+    id: 'par-1',
+    idSite: 'site-1',
+    idChamp: 'champ-1',
+    code: 'PARC-OBL-01',
+    nom: 'Parcelle Nord-01 - Maïs & Céréales',
+    surface: 12.5,
+    vocation: 'Agricole',
+    typeExploitation: 'Culture Végétale',
+    statutParcelle: 'En Culture',
+    dateDecoupage: '2023-05-01',
+    latitude: 4.1680,
+    longitude: 11.5340,
+    typeSol: 'Sablo-argileux ferrallitique',
+    ph: 6.2,
+    sourceEau: 'Forage motopompe',
+    expertValide: true,
+    expertDescription: 'Sol bien drainé, excellent pour le maïs après fertilisation azotée de fond.'
+  },
+  {
+    id: 'par-2',
+    idSite: 'site-1',
+    idChamp: 'champ-1',
+    code: 'PARC-OBL-02',
+    nom: 'Parcelle Nord-02 - Maraîchage Tomates',
+    surface: 8.0,
+    vocation: 'Agricole',
+    typeExploitation: 'Culture Végétale',
+    statutParcelle: 'En Culture',
+    dateDecoupage: '2023-05-15',
+    latitude: 4.1695,
+    longitude: 11.5355,
+    typeSol: 'Argilo-humifère',
+    ph: 5.8,
+    sourceEau: 'Rivière Sanaga dérivation',
+    expertValide: true,
+    expertDescription: 'Apport potassique régulier pour la floraison et nouaison.'
+  },
+  {
+    id: 'par-3',
+    idSite: 'site-1',
+    idChamp: 'champ-1',
+    code: 'PARC-OBL-03',
+    nom: 'Parcelle Pâturage Rotatif Bovins',
+    surface: 10.0,
+    vocation: 'Pastorale',
+    typeExploitation: 'Élevage / Pâturage',
+    troupeauAffecte: 'Troupeau Bovin Goudali (35 têtes)',
+    statutParcelle: 'Pâturage Actif',
+    dateDecoupage: '2023-06-01',
+    latitude: 4.1660,
+    longitude: 11.5320,
+    typeSol: 'Sol sablo-limoneux de berge',
+    ph: 6.0,
+    sourceEau: 'Abreuvoir aménagé Sanaga',
+    expertValide: true,
+    expertDescription: 'Parcelle ensemencée en Brachiaria ruziziensis pour forte valeur nutritive.'
+  },
+  {
+    id: 'par-4',
+    idSite: 'site-3',
+    idChamp: 'champ-2',
+    code: 'PARC-MBD-01',
+    nom: 'Cacaoyère d’Ombrage Ouest',
+    surface: 48.0,
+    vocation: 'Agricole',
+    typeExploitation: 'Culture Végétale',
+    statutParcelle: 'En Culture',
+    dateDecoupage: '2022-12-01',
+    latitude: 5.6291,
+    longitude: 10.2530,
+    typeSol: 'Volcanique humifère',
+    ph: 5.5,
+    sourceEau: 'Précipitations naturelles régulières',
+    expertValide: true,
+    expertDescription: 'Plantation sous ombrage agroforestier avec bananiers et arbres fertilitaires.'
+  },
+  {
+    id: 'par-5',
+    idSite: 'site-2',
+    idChamp: 'champ-3',
+    code: 'PARC-BAF-01',
+    nom: 'Parc Pastoral & Silvopastoralisme',
+    surface: 25.0,
+    vocation: 'Pastorale',
+    typeExploitation: 'Élevage / Pâturage',
+    troupeauAffecte: 'Génisses et Taurillons en engraissement',
+    statutParcelle: 'Pâturage Actif',
+    dateDecoupage: '2024-03-10',
+    latitude: 4.7520,
+    longitude: 11.2350,
+    typeSol: 'Sol latéritique herbeux',
+    ph: 6.3,
+    sourceEau: 'Forage solaire à auge',
+    expertValide: true,
+    expertDescription: 'Clôture électrique installée, 3 paddocks de rotation pour repos de l\'herbe.'
+  }
 ];
 
 export const INITIAL_CAMPAGNES: Campagne[] = [
