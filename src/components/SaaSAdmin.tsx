@@ -313,11 +313,15 @@ CREATE POLICY "Contrôle complet admin factures" ON saas_invoices FOR ALL USING 
     }
   };
 
-  const handleConvexTestConnection = async () => {
+  const handleConvexTestConnection = async (targetUrl?: string) => {
+    const urlToTest = targetUrl || convexCloudInput || getConvexUrl();
     setConvexTestResult({ running: true });
     try {
-      const res = await ConvexSyncService.testConnection();
+      const res = await ConvexSyncService.testConnection(urlToTest);
       setConvexTestResult(res);
+      if (res.ok) {
+        saveConvexSettings(urlToTest);
+      }
     } catch (e: any) {
       setConvexTestResult({ ok: false, message: e.message || 'Erreur lors du test Convex' });
     }
@@ -2351,6 +2355,29 @@ export default defineSchema({
                     </div>
 
                     <div className="space-y-3">
+                      {convexCloudInput !== 'https://canny-rhinoceros-666.eu-west-1.convex.cloud' && (
+                        <div className="bg-emerald-50 border border-emerald-300 p-3 rounded-xl flex flex-wrap items-center justify-between gap-2.5 text-xs text-emerald-950 shadow-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <span><strong>Vos tables sont déployées sur :</strong> <code className="font-mono font-bold bg-white px-1.5 py-0.5 rounded border border-emerald-300 text-emerald-900">canny-rhinoceros-666</code></span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const deployedCloud = 'https://canny-rhinoceros-666.eu-west-1.convex.cloud';
+                              const deployedSite = 'https://canny-rhinoceros-666.eu-west-1.convex.site';
+                              setConvexCloudInput(deployedCloud);
+                              setConvexSiteInput(deployedSite);
+                              saveConvexSettings(deployedCloud, deployedSite);
+                              handleConvexTestConnection(deployedCloud);
+                            }}
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-lg cursor-pointer transition shadow-xs text-[11px] whitespace-nowrap flex items-center gap-1.5"
+                          >
+                            ⚡ Basculer sur cette instance
+                          </button>
+                        </div>
+                      )}
+
                       <div>
                         <div className="flex justify-between items-center mb-1">
                           <label className="text-[11px] font-black text-slate-700 flex items-center gap-1.5">
@@ -2363,7 +2390,7 @@ export default defineSchema({
                           type="url"
                           value={convexCloudInput}
                           onChange={(e) => setConvexCloudInput(e.target.value)}
-                          placeholder="https://coordinated-partridge-388.eu-west-1.convex.cloud"
+                          placeholder="https://canny-rhinoceros-666.eu-west-1.convex.cloud"
                           className="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-lg px-3 py-2 text-xs font-mono text-slate-800 focus:outline-none"
                         />
                         <p className="text-[10px] text-slate-400 mt-1">
@@ -2383,7 +2410,7 @@ export default defineSchema({
                           type="url"
                           value={convexSiteInput}
                           onChange={(e) => setConvexSiteInput(e.target.value)}
-                          placeholder="https://coordinated-partridge-388.eu-west-1.convex.site"
+                          placeholder="https://canny-rhinoceros-666.eu-west-1.convex.site"
                           className="w-full bg-white border border-slate-300 focus:border-amber-500 rounded-lg px-3 py-2 text-xs font-mono text-slate-800 focus:outline-none"
                         />
                         <p className="text-[10px] text-slate-400 mt-1">
@@ -2400,7 +2427,7 @@ export default defineSchema({
                             saveConvexSettings(convexCloudInput, convexSiteInput);
                             setConvexSavedNotice(true);
                             setTimeout(() => setConvexSavedNotice(false), 3000);
-                            handleConvexTestConnection();
+                            handleConvexTestConnection(convexCloudInput);
                           }}
                           className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-lg transition cursor-pointer flex items-center gap-1.5 shadow-xs"
                         >
@@ -2417,7 +2444,7 @@ export default defineSchema({
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={handleConvexTestConnection}
+                          onClick={() => handleConvexTestConnection(convexCloudInput)}
                           disabled={convexTestResult?.running}
                           className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 text-[11px] font-extrabold rounded-lg transition flex items-center gap-1.5 cursor-pointer"
                         >

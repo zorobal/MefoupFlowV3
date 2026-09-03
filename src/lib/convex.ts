@@ -6,32 +6,58 @@ import { SaaSClient, TenantDatabase } from '../types';
  * Service d'intégration Convex.dev pour Mefoup Flow ERP
  */
 
+const DEPLOYED_DEFAULT_URL = 'https://canny-rhinoceros-666.eu-west-1.convex.cloud';
+const DEPLOYED_DEFAULT_SITE = 'https://canny-rhinoceros-666.eu-west-1.convex.site';
+
 const getInitialConvexUrl = (): string => {
-  const envUrl = ((import.meta as any).env?.VITE_CONVEX_URL as string) || '';
-  if (envUrl && envUrl.trim().length > 0 && !envUrl.includes('your-deployment-name')) {
-    return envUrl.trim();
-  }
   try {
     const saved = localStorage.getItem('mefoup_convex_url');
-    if (saved && saved.trim().length > 0) return saved.trim();
+    // Si saved pointe sur l'ancienne instance non déployée, on bascule sur la nouvelle instance déployée
+    if (saved && saved.includes('coordinated-partridge-388')) {
+      localStorage.setItem('mefoup_convex_url', DEPLOYED_DEFAULT_URL);
+      return DEPLOYED_DEFAULT_URL;
+    }
+    if (saved && saved.trim().length > 0 && !saved.includes('your-deployment-name')) {
+      return saved.trim();
+    }
   } catch (e) {}
-  return '';
+
+  const envUrl = ((import.meta as any).env?.VITE_CONVEX_URL as string) || '';
+  if (envUrl && envUrl.trim().length > 0 && !envUrl.includes('your-deployment-name')) {
+    if (envUrl.includes('coordinated-partridge-388')) {
+      return DEPLOYED_DEFAULT_URL;
+    }
+    return envUrl.trim();
+  }
+
+  return DEPLOYED_DEFAULT_URL;
 };
 
 const getInitialConvexSiteUrl = (): string => {
-  const envSite = ((import.meta as any).env?.VITE_CONVEX_SITE_URL as string) || '';
-  if (envSite && envSite.trim().length > 0 && !envSite.includes('your-deployment-name')) {
-    return envSite.trim();
-  }
   try {
     const saved = localStorage.getItem('mefoup_convex_site_url');
-    if (saved && saved.trim().length > 0) return saved.trim();
+    if (saved && saved.includes('coordinated-partridge-388')) {
+      localStorage.setItem('mefoup_convex_site_url', DEPLOYED_DEFAULT_SITE);
+      return DEPLOYED_DEFAULT_SITE;
+    }
+    if (saved && saved.trim().length > 0 && !saved.includes('your-deployment-name')) {
+      return saved.trim();
+    }
   } catch (e) {}
+
+  const envSite = ((import.meta as any).env?.VITE_CONVEX_SITE_URL as string) || '';
+  if (envSite && envSite.trim().length > 0 && !envSite.includes('your-deployment-name')) {
+    if (envSite.includes('coordinated-partridge-388')) {
+      return DEPLOYED_DEFAULT_SITE;
+    }
+    return envSite.trim();
+  }
+
   const cloud = getInitialConvexUrl();
   if (cloud.includes('.convex.cloud')) {
     return cloud.replace('.convex.cloud', '.convex.site');
   }
-  return '';
+  return DEPLOYED_DEFAULT_SITE;
 };
 
 let currentConvexUrl: string = getInitialConvexUrl();
@@ -109,16 +135,22 @@ export const ConvexSyncService = {
   /**
    * Vérifie la connectivité avec le déploiement Convex
    */
-  async testConnection(): Promise<{ ok: boolean; message: string; latencyMs?: number; functionsDeployed?: boolean }> {
-    if (!isConvexConfigured()) {
+  async testConnection(customUrl?: string): Promise<{ ok: boolean; message: string; latencyMs?: number; functionsDeployed?: boolean; host?: string }> {
+    const activeUrl = (customUrl && customUrl.trim().length > 0 ? customUrl.trim() : getConvexUrl());
+    if (!activeUrl || (!activeUrl.startsWith('https://') && !activeUrl.startsWith('http://'))) {
       return {
         ok: false,
-        message: "L'URL Convex n'est pas encore configurée dans .env (VITE_CONVEX_URL).",
+        message: "L'URL Convex n'est pas encore configurée ou invalide.",
       };
     }
 
+    let hostName = 'Convex';
+    try {
+      const u = new URL(activeUrl);
+      hostName = u.hostname.split('.')[0] || activeUrl;
+    } catch (e) {}
+
     const start = performance.now();
-    const activeUrl = getConvexUrl();
     try {
       // 1. Test de disponibilité du backend et détection des fonctions déployées
       const checkFuncRes = await fetch(`${activeUrl.replace(/\/$/, '')}/api/query`, {
@@ -135,7 +167,8 @@ export const ConvexSyncService = {
           return {
             ok: false,
             functionsDeployed: false,
-            message: `Instance Convex en ligne (${latency}ms), mais le dossier convex/ n'est pas encore déployé sur le cloud. Exécutez 'npx convex dev' pour générer les tables.`,
+            host: hostName,
+            message: `Instance [${hostName}] joignable (${latency}ms), mais vos fonctions sont déployées sur 'canny-rhinoceros-666'. Cliquez sur 'Basculer' pour corriger.`,
             latencyMs: latency,
           };
         }
@@ -143,7 +176,8 @@ export const ConvexSyncService = {
           return {
             ok: true,
             functionsDeployed: true,
-            message: `Connecté à Convex (${latency}ms) — Schéma et fonctions prêts !`,
+            host: hostName,
+            message: `Connecté à Convex [${hostName}] (${latency}ms) — Schéma et tables opérationnels !`,
             latencyMs: latency,
           };
         }
@@ -153,14 +187,16 @@ export const ConvexSyncService = {
       return {
         ok: true,
         functionsDeployed: true,
-        message: `Instance Convex joignable (${activeUrl}, ${latency}ms).`,
+        host: hostName,
+        message: `Instance Convex [${hostName}] joignable (${latency}ms).`,
         latencyMs: latency,
       };
     } catch (err: any) {
       return {
         ok: false,
         functionsDeployed: false,
-        message: `Erreur de connexion à Convex : ${err.message || 'Hôte introuvable'}`,
+        host: hostName,
+        message: `Erreur de connexion à [${hostName}] : ${err.message || 'Hôte introuvable'}`,
       };
     }
   },
