@@ -334,7 +334,10 @@ CREATE POLICY "Contrôle complet admin factures" ON saas_invoices FOR ALL USING 
       // 1. Sync tenants
       setConvexSyncMessage(`Synchronisation de ${clients.length} clients SaaS vers Convex...`);
       for (const client of clients) {
-        await ConvexSyncService.saveTenant(client);
+        const res = await ConvexSyncService.saveTenant(client);
+        if (!res.success) {
+          throw new Error(res.message);
+        }
       }
 
       // 2. Sync tenant databases
@@ -343,7 +346,10 @@ CREATE POLICY "Contrôle complet admin factures" ON saas_invoices FOR ALL USING 
       for (const tId of tenantIds) {
         const db = databases[tId];
         if (db) {
-          await ConvexSyncService.syncTenantDatabase(tId, db, `Sauvegarde SaaS Admin (${new Date().toLocaleDateString()})`, 'SuperAdmin');
+          const res = await ConvexSyncService.syncTenantDatabase(tId, db, `Sauvegarde SaaS Admin (${new Date().toLocaleDateString()})`, 'SuperAdmin');
+          if (!res.success) {
+            throw new Error(res.message);
+          }
         }
       }
 
@@ -2491,23 +2497,51 @@ export default defineSchema({
                   </div>
                 </div>
 
-                {/* Convex Guide Steps */}
-                <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-5 space-y-3">
-                  <h4 className="text-xs font-black text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
-                    <CheckCircle className="h-4 w-4 text-amber-700" />
-                    Comment démarrer avec Convex en 3 étapes simples :
-                  </h4>
-                  <ol className="list-decimal pl-4 text-xs text-amber-950 space-y-2 font-medium">
-                    <li>
-                      <strong>Le SDK est déjà installé :</strong> le package <code className="bg-white px-1.5 py-0.5 rounded border text-amber-900 font-mono">convex</code> est déjà prêt dans le projet.
-                    </li>
-                    <li>
-                      <strong>Lancer l'initialisation :</strong> Dans votre terminal local, exécutez <code className="bg-white px-1.5 py-0.5 rounded border text-amber-900 font-mono font-bold">npx convex dev</code> pour lier votre compte Convex.
-                    </li>
-                    <li>
-                      <strong>Zéro SQL à migrer :</strong> Convex synchronise directement les schémas TypeScript du dossier <code className="bg-white px-1.5 py-0.5 rounded border text-amber-900 font-mono">convex/</code>.
-                    </li>
-                  </ol>
+                {/* Convex Guide Steps & Pourquoi mes tables ne s'affichent pas */}
+                <div className="bg-amber-50/90 border border-amber-300 rounded-2xl p-5 space-y-4 shadow-xs">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-amber-200 text-amber-900 rounded-xl">
+                      <HelpCircle className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-amber-950">
+                        Pourquoi vos tables ne s'affichent pas encore sur le Dashboard Convex ?
+                      </h4>
+                      <p className="text-xs text-amber-900 mt-1 leading-relaxed">
+                        Contrairement à Supabase où l'on colle du SQL, <strong>Convex est 100% automatisé par le code</strong>. Les tables sont générées sur le Cloud dès que les fichiers du dossier <code className="bg-white px-1.5 py-0.5 rounded border text-amber-950 font-mono font-bold">convex/</code> sont poussés vers votre instance <code className="bg-white px-1.5 py-0.5 rounded border font-mono">coordinated-partridge-388</code>.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-amber-200 rounded-xl p-3.5 space-y-2.5">
+                    <p className="text-xs font-black text-slate-800 flex items-center gap-2">
+                      <span className="h-5 w-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-bold">1</span>
+                      Dans le terminal de votre projet, lancez cette commande unique :
+                    </p>
+                    <div className="flex items-center justify-between gap-2 bg-slate-900 p-2.5 rounded-lg">
+                      <code className="text-xs font-mono text-emerald-400 select-all font-bold">
+                        npx convex dev
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText('npx convex dev');
+                          alert('Commande "npx convex dev" copiée ! Collez-la dans votre terminal.');
+                        }}
+                        className="text-[11px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded cursor-pointer"
+                      >
+                        Copier
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      👉 Convex va se connecter à votre déploiement <strong className="text-indigo-700">coordinated-partridge-388</strong>, compiler le schéma TypeScript et créer instantanément les tables <strong>saas_tenants</strong>, <strong>erp_records</strong> et <strong>tenant_backups</strong> dans votre dashboard !
+                    </p>
+                  </div>
+
+                  <div className="text-[11px] text-amber-900 bg-amber-100/70 p-2.5 rounded-lg border border-amber-200 flex items-center gap-2">
+                    <span className="font-bold">Astuce :</span>
+                    <span>Dès que la commande est lancée, retournez sur <strong className="font-mono">dashboard.convex.dev</strong> &gt; <strong>Data</strong> : vos tables y seront visibles en temps réel !</span>
+                  </div>
                 </div>
               </div>
 

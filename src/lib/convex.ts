@@ -109,7 +109,7 @@ export const ConvexSyncService = {
   /**
    * Vérifie la connectivité avec le déploiement Convex
    */
-  async testConnection(): Promise<{ ok: boolean; message: string; latencyMs?: number }> {
+  async testConnection(): Promise<{ ok: boolean; message: string; latencyMs?: number; functionsDeployed?: boolean }> {
     if (!isConvexConfigured()) {
       return {
         ok: false,
@@ -120,31 +120,46 @@ export const ConvexSyncService = {
     const start = performance.now();
     const activeUrl = getConvexUrl();
     try {
-      // Test de connectivité par requête ping HTTP vers le point d'accès Convex
-      const res = await fetch(`${activeUrl.replace(/\/$/, '')}/api/version`, {
-        method: 'GET',
+      // 1. Test de disponibilité du backend et détection des fonctions déployées
+      const checkFuncRes = await fetch(`${activeUrl.replace(/\/$/, '')}/api/query`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: 'tenants:listTenants', args: {}, format: 'json' }),
       }).catch(() => null);
 
       const latency = Math.round(performance.now() - start);
 
-      if (res && (res.ok || res.status === 404 || res.status === 200)) {
-        return {
-          ok: true,
-          message: `Connexion à Convex établie avec succès (${latency}ms).`,
-          latencyMs: latency,
-        };
+      if (checkFuncRes) {
+        const data = await checkFuncRes.json().catch(() => ({}));
+        if (data && data.status === 'error' && typeof data.errorMessage === 'string' && data.errorMessage.includes('Could not find public function')) {
+          return {
+            ok: false,
+            functionsDeployed: false,
+            message: `Instance Convex en ligne (${latency}ms), mais le dossier convex/ n'est pas encore déployé sur le cloud. Exécutez 'npx convex dev' pour générer les tables.`,
+            latencyMs: latency,
+          };
+        }
+        if (data && (data.status === 'success' || Array.isArray(data.value))) {
+          return {
+            ok: true,
+            functionsDeployed: true,
+            message: `Connecté à Convex (${latency}ms) — Schéma et fonctions prêts !`,
+            latencyMs: latency,
+          };
+        }
       }
 
-      // Si le endpoint version n'est pas exposé directement, un ping direct sur l'URL
+      // Si le endpoint API query renvoie une autre réponse
       return {
         ok: true,
-        message: `Instance Convex joignable (${activeUrl}).`,
+        functionsDeployed: true,
+        message: `Instance Convex joignable (${activeUrl}, ${latency}ms).`,
         latencyMs: latency,
       };
     } catch (err: any) {
       return {
         ok: false,
+        functionsDeployed: false,
         message: `Erreur de connexion à Convex : ${err.message || 'Hôte introuvable'}`,
       };
     }
@@ -186,7 +201,14 @@ export const ConvexSyncService = {
       return { success: true, message: `Tenant ${client.raisonSociale} synchronisé dans Convex.` };
     } catch (err: any) {
       console.error('[Convex] Erreur saveTenant:', err);
-      return { success: false, message: err.message || 'Erreur inconnue' };
+      const rawMsg = err.message || '';
+      if (rawMsg.includes('Could not find public function')) {
+        return {
+          success: false,
+          message: "Le schéma n'a pas encore été publié sur Convex Cloud. Lancez 'npx convex dev' dans votre terminal pour créer les tables automatiquement.",
+        };
+      }
+      return { success: false, message: rawMsg || 'Erreur inconnue' };
     }
   },
 
@@ -224,7 +246,14 @@ export const ConvexSyncService = {
       };
     } catch (err: any) {
       console.error('[Convex] Erreur syncTenantDatabase:', err);
-      return { success: false, message: err.message || 'Erreur de synchronisation Convex' };
+      const rawMsg = err.message || '';
+      if (rawMsg.includes('Could not find public function')) {
+        return {
+          success: false,
+          message: "Fonction 'erp:syncFullTenantDatabase' introuvable. Exécutez 'npx convex dev' dans votre terminal pour pousser les fonctions.",
+        };
+      }
+      return { success: false, message: rawMsg || 'Erreur de synchronisation Convex' };
     }
   },
 
