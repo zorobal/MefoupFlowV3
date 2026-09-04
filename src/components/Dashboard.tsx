@@ -107,14 +107,21 @@ export default function Dashboard({
   const activeDebitSum = piecesComptables.filter(p => p.debitCompte.includes('5211') || p.debitCompte.includes('Banque') || p.debitCompte.includes('Caisse')).reduce((sum, p) => sum + p.montant, 0);
   const activeCreditSum = piecesComptables.filter(p => p.creditCompte.includes('7011') || p.creditCompte.includes('Vente')).reduce((sum, p) => sum + p.montant, 0);
   
-  // Custom finance dataset for chart
-  const financeProgressionData = [
+  // Custom finance dataset for chart (only seed sample progression if in demo client)
+  const financeProgressionData = isDemo ? [
     { name: 'Janvier', Recettes: 1500000, Depenses: 1200000 },
     { name: 'Février', Recettes: 2200000, Depenses: 1500000 },
     { name: 'Mars', Recettes: 1800000, Depenses: 1900000 },
     { name: 'Avril', Recettes: 3500000, Depenses: 2100000 },
     { name: 'Mai', Recettes: 4000000, Depenses: 2500000 },
     { name: 'Juin', Recettes: activeCreditSum > 0 ? activeCreditSum : 4800000, Depenses: activeDebitSum > 0 ? activeDebitSum : 2800000 }
+  ] : [
+    { name: 'Janvier', Recettes: 0, Depenses: 0 },
+    { name: 'Février', Recettes: 0, Depenses: 0 },
+    { name: 'Mars', Recettes: 0, Depenses: 0 },
+    { name: 'Avril', Recettes: 0, Depenses: 0 },
+    { name: 'Mai', Recettes: 0, Depenses: 0 },
+    { name: 'Juin', Recettes: activeCreditSum, Depenses: activeDebitSum }
   ];
 
   // Distribute parcelles crops using cultures prop

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   INITIAL_SAAS_CLIENTS,
   INITIAL_EXPLOITATIONS,
@@ -134,6 +134,8 @@ import SettingsModule from './components/SettingsModule';
 import EquipementModule from './components/EquipementModule';
 import BIModule from './components/BIModule';
 import { MefoupLogo, MefoupRibbon } from './components/MefoupBrand';
+import { GUIDE_TUTORIAL_ITEMS, GuideTutorialItem } from './data/guideTutorialData';
+import { GuideDetailModal } from './components/GuideDetailModal';
 
 import {
   Building2,
@@ -166,7 +168,8 @@ import {
   LineChart,
   Eye,
   EyeOff,
-  Download
+  Download,
+  HelpCircle
 } from 'lucide-react';
 
 export default function App() {
@@ -240,6 +243,25 @@ export default function App() {
     }
     return INITIAL_SAAS_LOGS;
   });
+
+  const loadedTenantIdRef = useRef<string>(getStartupActiveTenantId());
+  const isSwitchingTenantRef = useRef<boolean>(false);
+
+  // Tutorial Guide & Step-by-Step Interactive System
+  const [isGuideActive, setIsGuideActive] = useState<boolean>(() => {
+    return localStorage.getItem('mefoup_guide_active') !== 'false';
+  });
+  const [hoveredGuideTab, setHoveredGuideTab] = useState<string | null>(null);
+  const [selectedGuideItem, setSelectedGuideItem] = useState<GuideTutorialItem | null>(null);
+  const [isGuideModalOpen, setIsGuideModalOpen] = useState<boolean>(false);
+
+  const openGuideModal = (tabKey: string) => {
+    const item = GUIDE_TUTORIAL_ITEMS[tabKey];
+    if (item) {
+      setSelectedGuideItem(item);
+      setIsGuideModalOpen(true);
+    }
+  };
 
   // SaaS Subscription Plans and limits
   const [saasPlanConfigs, setSaasPlanConfigs] = useState(() => {
@@ -421,6 +443,16 @@ export default function App() {
         documents: [],
         regles: INITIAL_ALERTE_REGLES,
         notifications: [],
+        compteursUtilisation: [],
+        utilisationsEquipement: [],
+        plansMaintenance: [],
+        pannesEquipement: [],
+        assurancesEquipement: [],
+        indicateursKPI: [],
+        tableauxDeBord: [],
+        rapportsProgrammes: [],
+        alertesBI: [],
+        requetesPerso: [],
         auditLogs: [
           { id: 'aud-ini', dateHeure: new Date().toISOString().replace('T', ' ').substring(0, 16), operateur: 'Système', role: 'SuperAdmin', action: 'PROVISION_DB', description: 'Base de données isolée initialisée avec succès pour la nouvelle instance.' }
         ],
@@ -718,7 +750,10 @@ export default function App() {
 
   React.useEffect(() => {
     // Sync active tenant states back into databases map dynamically, then persist databases to localStorage
+    if (isSwitchingTenantRef.current) return;
     if (!activeTenant || !activeTenant.id) return;
+    // CRITICAL: Only sync if the currently loaded states in React belong to this active tenant
+    if (loadedTenantIdRef.current !== activeTenant.id) return;
     setDatabases(prev => {
       const updated = {
         ...prev,
@@ -1273,10 +1308,13 @@ export default function App() {
 
   // switchActiveTenant - isolates databases per tenant ID
   const switchActiveTenant = (newTenant: SaaSClient) => {
-    // 1. Save current active tenant's states to the databases dictionary
-    setDatabases(prev => ({
-      ...prev,
-      [activeTenant.id]: {
+    if (!newTenant) return;
+    isSwitchingTenantRef.current = true;
+
+    // 1. Snapshot the outgoing tenant's state if loaded
+    const outgoingTenantId = loadedTenantIdRef.current;
+    if (outgoingTenantId) {
+      const outgoingSnapshot: TenantDatabase = {
         exploitations,
         sitesAgricoles,
         champs,
@@ -1318,56 +1356,86 @@ export default function App() {
         regles,
         notifications,
         auditLogs,
-        systemSettings
-      }
-    }));
+        systemSettings,
+        compteursUtilisation,
+        utilisationsEquipement,
+        plansMaintenance,
+        pannesEquipement,
+        assurancesEquipement,
+        indicateursKPI,
+        tableauxDeBord,
+        rapportsProgrammes,
+        alertesBI,
+        requetesPerso
+      };
+
+      setDatabases(prev => {
+        const updated = { ...prev, [outgoingTenantId]: outgoingSnapshot };
+        localStorage.setItem('tenantDatabases', JSON.stringify(updated));
+        return updated;
+      });
+    }
 
     // 2. Load next tenant database partition or create a clean empty one
-    const nextDb = databases[newTenant.id] || getInitialDatabase(newTenant.id);
+    let nextDb: TenantDatabase | undefined = databases[newTenant.id];
+    if (!nextDb) {
+      const savedStr = localStorage.getItem('tenantDatabases');
+      if (savedStr) {
+        try {
+          const parsed = JSON.parse(savedStr);
+          if (parsed[newTenant.id]) {
+            nextDb = parsed[newTenant.id];
+          }
+        } catch (e) {}
+      }
+    }
+    if (!nextDb) {
+      nextDb = getInitialDatabase(newTenant.id);
+    }
 
     // 3. Load other states
-    setExploitations(nextDb.exploitations);
-    setSitesAgricoles(nextDb.sitesAgricoles);
+    setExploitations(nextDb.exploitations || []);
+    setSitesAgricoles(nextDb.sitesAgricoles || []);
     setChamps(nextDb.champs || []);
-    setParcelles(nextDb.parcelles);
+    setParcelles(nextDb.parcelles || []);
     setUtilisateurs(nextDb.utilisateurs || []);
-    setCampagnes(nextDb.campagnes);
-    setCultures(nextDb.cultures);
-    setInterventions(nextDb.interventions);
-    setRecoltes(nextDb.recoltes);
-    setIncidents(nextDb.incidents);
-    setSitesElevage(nextDb.sitesElevage);
-    setBatiments(nextDb.batiments);
-    setTroupeaux(nextDb.troupeaux);
-    setAnimaux(nextDb.animaux);
-    setReproGestations(nextDb.reproGestations);
-    setCarnetsSanitaires(nextDb.carnetsSanitaires);
-    setFeedLogs(nextDb.feedLogs);
-    setProdElevages(nextDb.prodElevages);
-    setMagasins(nextDb.magasins);
-    setArticles(nextDb.articles);
-    setMouvementsStock(nextDb.mouvementsStock);
-    setEquipements(nextDb.equipements);
-    setMaintenances(nextDb.maintenances);
-    setFuelLogs(nextDb.fuelLogs);
-    setFournisseurs(nextDb.fournisseurs);
-    setDemandesAchat(nextDb.demandesAchat);
-    setBonsCommande(nextDb.bonsCommande);
-    setClientsAcheteurs(nextDb.clientsAcheteurs);
-    setDevis(nextDb.devis);
-    setCommandesClients(nextDb.commandesClients);
-    setFactures(nextDb.factures);
-    setEncaissements(nextDb.encaissements);
-    setPiecesComptables(nextDb.piecesComptables);
-    setBudgets(nextDb.budgets);
-    setEmployes(nextDb.employes);
-    setPresences(nextDb.presences);
-    setBulletins(nextDb.bulletins);
-    setDocuments(nextDb.documents);
-    setRegles(nextDb.regles);
-    setNotifications(nextDb.notifications);
-    setAuditLogs(nextDb.auditLogs);
-    setSystemSettings(nextDb.systemSettings);
+    setCampagnes(nextDb.campagnes || []);
+    setCultures(nextDb.cultures || []);
+    setInterventions(nextDb.interventions || []);
+    setRecoltes(nextDb.recoltes || []);
+    setIncidents(nextDb.incidents || []);
+    setSitesElevage(nextDb.sitesElevage || []);
+    setBatiments(nextDb.batiments || []);
+    setTroupeaux(nextDb.troupeaux || []);
+    setAnimaux(nextDb.animaux || []);
+    setReproGestations(nextDb.reproGestations || []);
+    setCarnetsSanitaires(nextDb.carnetsSanitaires || []);
+    setFeedLogs(nextDb.feedLogs || []);
+    setProdElevages(nextDb.prodElevages || []);
+    setMagasins(nextDb.magasins || []);
+    setArticles(nextDb.articles || []);
+    setMouvementsStock(nextDb.mouvementsStock || []);
+    setEquipements(nextDb.equipements || []);
+    setMaintenances(nextDb.maintenances || []);
+    setFuelLogs(nextDb.fuelLogs || []);
+    setFournisseurs(nextDb.fournisseurs || []);
+    setDemandesAchat(nextDb.demandesAchat || []);
+    setBonsCommande(nextDb.bonsCommande || []);
+    setClientsAcheteurs(nextDb.clientsAcheteurs || []);
+    setDevis(nextDb.devis || []);
+    setCommandesClients(nextDb.commandesClients || []);
+    setFactures(nextDb.factures || []);
+    setEncaissements(nextDb.encaissements || []);
+    setPiecesComptables(nextDb.piecesComptables || []);
+    setBudgets(nextDb.budgets || []);
+    setEmployes(nextDb.employes || []);
+    setPresences(nextDb.presences || []);
+    setBulletins(nextDb.bulletins || []);
+    setDocuments(nextDb.documents || []);
+    setRegles(nextDb.regles || INITIAL_ALERTE_REGLES);
+    setNotifications(nextDb.notifications || []);
+    setAuditLogs(nextDb.auditLogs || []);
+    setSystemSettings(nextDb.systemSettings || DEFAULT_SYSTEM_SETTINGS);
 
     setCompteursUtilisation(nextDb.compteursUtilisation || []);
     setUtilisationsEquipement(nextDb.utilisationsEquipement || []);
@@ -1380,8 +1448,15 @@ export default function App() {
     setAlertesBI(nextDb.alertesBI || []);
     setRequetesPerso(nextDb.requetesPerso || []);
 
-    // 4. Update the activeTenant state
+    // 4. Update the activeTenant and loadedTenantIdRef
+    loadedTenantIdRef.current = newTenant.id;
     setActiveTenant(newTenant);
+    localStorage.setItem('activeTenant', JSON.stringify(newTenant));
+
+    // Release switching lock
+    setTimeout(() => {
+      isSwitchingTenantRef.current = false;
+    }, 50);
   };
 
   // Login handler
@@ -2418,6 +2493,91 @@ export default function App() {
     );
   }
 
+  const renderSidebarTab = (
+    tabKey: 'dashboard' | 'bi-reporting' | 'agriculture' | 'elevage' | 'stocks' | 'parc-materiel' | 'commercial' | 'compta' | 'rh' | 'ged' | 'settings',
+    label: string,
+    icon: React.ReactNode
+  ) => {
+    const isActive = erpTab === tabKey;
+    const guideItem = GUIDE_TUTORIAL_ITEMS[tabKey];
+    const isHovered = isGuideActive && hoveredGuideTab === tabKey;
+
+    return (
+      <div
+        key={tabKey}
+        className="relative"
+        onMouseEnter={() => {
+          if (isGuideActive) setHoveredGuideTab(tabKey);
+        }}
+        onMouseLeave={() => {
+          if (isGuideActive) setHoveredGuideTab(null);
+        }}
+      >
+        <button
+          onClick={() => setErpTab(tabKey)}
+          className={`w-full text-left p-2 rounded-lg transition text-xs font-bold flex items-center justify-between gap-1.5 cursor-pointer ${
+            isActive
+              ? 'bg-[#1E7A44] text-white shadow-xs border-l-4 border-[#8CC63F]'
+              : 'hover:bg-[#0F3D2E] hover:text-white text-zinc-300'
+          }`}
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            {icon}
+            <span className="truncate">{label}</span>
+          </div>
+
+          {isGuideActive && guideItem && (
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                openGuideModal(tabKey);
+              }}
+              title="Cliquer pour afficher la bulle d'information & le guide détaillé"
+              className="p-1 rounded-md bg-[#0F3D2E]/80 text-[#8CC63F] hover:bg-[#8CC63F] hover:text-[#0F3D2E] transition shrink-0 cursor-pointer shadow-xs"
+            >
+              <HelpCircle className="h-3.5 w-3.5" />
+            </span>
+          )}
+        </button>
+
+        {/* Floating Info Bubble ("bulle d'information") on hover */}
+        {isHovered && guideItem && (
+          <div
+            onClick={() => openGuideModal(tabKey)}
+            className="absolute left-full top-0 ml-3 w-80 z-50 bg-white text-slate-800 rounded-xl shadow-2xl border-2 border-[#1E7A44] p-4 cursor-pointer animate-in fade-in zoom-in-95 duration-150 text-left"
+            style={{ filter: 'drop-shadow(0 15px 30px rgba(0,0,0,0.35))' }}
+          >
+            {/* Pointer arrow */}
+            <div className="absolute -left-2 top-3 w-0 h-0 border-y-8 border-y-transparent border-r-8 border-r-[#1E7A44]"></div>
+            <div className="absolute -left-1.5 top-3 w-0 h-0 border-y-8 border-y-transparent border-r-8 border-r-white"></div>
+
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-[#0F3D2E] border border-emerald-200 tracking-wider">
+                {guideItem.category}
+              </span>
+              <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                <HelpCircle className="h-3 w-3 text-[#1E7A44]" /> Tuto Pas à Pas
+              </span>
+            </div>
+
+            <h5 className="font-black text-xs text-slate-900 mb-1 flex items-center gap-1.5">
+              {guideItem.title}
+            </h5>
+
+            <p className="text-[11px] text-slate-600 leading-relaxed line-clamp-3 mb-2.5">
+              {guideItem.shortSummary}
+            </p>
+
+            <div className="bg-[#0F3D2E]/5 hover:bg-[#0F3D2E]/10 text-[#0F3D2E] border border-[#1E7A44]/30 p-2 rounded-lg text-[10.5px] font-extrabold flex items-center justify-between transition">
+              <span>💡 Cliquer sur la bulle pour voir la description complète</span>
+              <ArrowRight className="h-3.5 w-3.5 text-[#1E7A44]" />
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
       
@@ -2452,15 +2612,37 @@ export default function App() {
           )}
 
           {appMode === 'client-erp' && (
-            <button
-              id="btn-export-client-page"
-              onClick={handleExportClientPageText}
-              className="bg-[#1E7A44] hover:bg-[#8CC63F] text-white hover:text-[#0F3D2E] font-extrabold text-xs py-2 px-3.5 rounded-lg border border-[#0F3D2E] transition flex items-center gap-2 cursor-pointer shadow-md"
-              title="Exporter le contenu explicatif de la page active en format texte"
-            >
-              <Download className="h-4 w-4 text-emerald-100" />
-              Exporter Page (.txt)
-            </button>
+            <>
+              <button
+                id="btn-toggle-guide-tuto"
+                onClick={() => {
+                  setIsGuideActive(prev => {
+                    const next = !prev;
+                    localStorage.setItem('mefoup_guide_active', String(next));
+                    return next;
+                  });
+                }}
+                className={`text-xs font-black py-2 px-3.5 rounded-lg border transition flex items-center gap-2 cursor-pointer shadow-md ${
+                  isGuideActive
+                    ? 'bg-[#8CC63F] text-[#0F3D2E] border-[#8CC63F] hover:bg-[#7bb634]'
+                    : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                }`}
+                title={isGuideActive ? "Désactiver le guide interactif pas à pas" : "Activer le guide interactif pas à pas"}
+              >
+                <HelpCircle className={`h-4 w-4 shrink-0 ${isGuideActive ? 'text-[#0F3D2E]' : 'text-[#8CC63F]'}`} />
+                <span>Guide Tuto : <strong className="uppercase">{isGuideActive ? 'Activé' : 'Désactivé'}</strong></span>
+              </button>
+
+              <button
+                id="btn-export-client-page"
+                onClick={handleExportClientPageText}
+                className="bg-[#1E7A44] hover:bg-[#8CC63F] text-white hover:text-[#0F3D2E] font-extrabold text-xs py-2 px-3.5 rounded-lg border border-[#0F3D2E] transition flex items-center gap-2 cursor-pointer shadow-md"
+                title="Exporter le contenu explicatif de la page active en format texte"
+              >
+                <Download className="h-4 w-4 text-emerald-100" />
+                Exporter Page (.txt)
+              </button>
+            </>
           )}
 
           {/* Switch app mode button - STRICTLY EXCLUSIVE TO PROVIDER ROLE FOR ISOLATION */}
@@ -2545,26 +2727,12 @@ export default function App() {
                   <span className="block text-[10px] text-[#8CC63F] font-black px-3 py-1 uppercase tracking-widest">
                     Cockpit Général
                   </span>
-                  <button
-                    onClick={() => setErpTab('dashboard')}
-                    className={`w-full text-left p-2 rounded-lg transition text-xs font-bold flex items-center gap-2.5 ${
-                      erpTab === 'dashboard' ? 'bg-[#1E7A44] text-white shadow-xs border-l-4 border-[#8CC63F]' : 'hover:bg-[#0F3D2E] hover:text-white'
-                    }`}
-                  >
-                    <Award className="h-4 w-4 text-[#8CC63F]" /> Cockpit Éxecutif / Météo
-                  </button>
+                  {renderSidebarTab('dashboard', 'Cockpit Éxecutif / Météo', <Award className="h-4 w-4 text-[#8CC63F] shrink-0" />)}
                 </>
               )}
 
               {simulatedRole.modules.includes('bi-reporting') && (
-                <button
-                  onClick={() => setErpTab('bi-reporting')}
-                  className={`w-full text-left p-2 rounded-lg transition text-xs font-bold flex items-center gap-2.5 ${
-                    erpTab === 'bi-reporting' ? 'bg-[#1E7A44] text-white shadow-xs border-l-4 border-[#8CC63F]' : 'hover:bg-[#0F3D2E] hover:text-white'
-                  }`}
-                >
-                  <LineChart className="h-4 w-4 text-[#8CC63F]" /> BI & Rapports
-                </button>
+                renderSidebarTab('bi-reporting', 'BI & Rapports', <LineChart className="h-4 w-4 text-[#8CC63F] shrink-0" />)
               )}
 
               {(simulatedRole.modules.includes('agriculture') || simulatedRole.modules.includes('elevage') || simulatedRole.modules.includes('stocks') || simulatedRole.modules.includes('parc-materiel')) && (
@@ -2574,47 +2742,19 @@ export default function App() {
               )}
 
               {simulatedRole.modules.includes('agriculture') && (
-                <button
-                  onClick={() => setErpTab('agriculture')}
-                  className={`w-full text-left p-2 rounded-lg transition text-xs font-bold flex items-center gap-2.5 ${
-                    erpTab === 'agriculture' ? 'bg-[#1E7A44] text-white shadow-sm border-l-4 border-[#8CC63F]' : 'hover:bg-[#0F3D2E] hover:text-white'
-                  }`}
-                >
-                  <Sprout className="h-4 w-4 text-[#8CC63F]" /> {systemSettings.customLabels.prodVegetale || 'Production Végétale'}
-                </button>
+                renderSidebarTab('agriculture', systemSettings.customLabels.prodVegetale || 'Production Végétale', <Sprout className="h-4 w-4 text-[#8CC63F] shrink-0" />)
               )}
 
               {simulatedRole.modules.includes('elevage') && (
-                <button
-                  onClick={() => setErpTab('elevage')}
-                  className={`w-full text-left p-2 rounded-lg transition text-xs font-bold flex items-center gap-2.5 ${
-                    erpTab === 'elevage' ? 'bg-[#1E7A44] text-white shadow-sm border-l-4 border-[#8CC63F]' : 'hover:bg-[#0F3D2E] hover:text-white'
-                  }`}
-                >
-                  <Egg className="h-4 w-4 text-[#8CC63F]" /> {systemSettings.customLabels.prodAnimale || 'Production Animale'}
-                </button>
+                renderSidebarTab('elevage', systemSettings.customLabels.prodAnimale || 'Production Animale', <Egg className="h-4 w-4 text-[#8CC63F] shrink-0" />)
               )}
 
               {simulatedRole.modules.includes('stocks') && (
-                <button
-                  onClick={() => setErpTab('stocks')}
-                  className={`w-full text-left p-2 rounded-lg transition text-xs font-bold flex items-center gap-2.5 ${
-                    erpTab === 'stocks' ? 'bg-[#1E7A44] text-white shadow-sm border-l-4 border-[#8CC63F]' : 'hover:bg-[#0F3D2E] hover:text-white'
-                  }`}
-                >
-                  <Package className="h-4 w-4 text-[#8CC63F]" /> Stocks & Magasins
-                </button>
+                renderSidebarTab('stocks', 'Stocks & Magasins', <Package className="h-4 w-4 text-[#8CC63F] shrink-0" />)
               )}
 
               {simulatedRole.modules.includes('parc-materiel') && (
-                <button
-                  onClick={() => setErpTab('parc-materiel')}
-                  className={`w-full text-left p-2 rounded-lg transition text-xs font-bold flex items-center gap-2.5 ${
-                    erpTab === 'parc-materiel' ? 'bg-[#1E7A44] text-white shadow-sm border-l-4 border-[#8CC63F]' : 'hover:bg-[#0F3D2E] hover:text-white'
-                  }`}
-                >
-                  <Wrench className="h-4 w-4 text-[#8CC63F]" /> Parc & Maintenance
-                </button>
+                renderSidebarTab('parc-materiel', 'Parc & Maintenance', <Wrench className="h-4 w-4 text-[#8CC63F] shrink-0" />)
               )}
 
               {(simulatedRole.modules.includes('commercial') || simulatedRole.modules.includes('compta')) && (
@@ -2624,25 +2764,11 @@ export default function App() {
               )}
 
               {simulatedRole.modules.includes('commercial') && (
-                <button
-                  onClick={() => setErpTab('commercial')}
-                  className={`w-full text-left p-2 rounded-lg transition text-xs font-bold flex items-center gap-2.5 ${
-                    erpTab === 'commercial' ? 'bg-[#1E7A44] text-white shadow-sm border-l-4 border-[#8CC63F]' : 'hover:bg-[#0F3D2E] hover:text-white'
-                  }`}
-                >
-                  <ShoppingBag className="h-4 w-4 text-[#8CC63F]" /> Facturations & Ventes
-                </button>
+                renderSidebarTab('commercial', 'Facturations & Ventes', <ShoppingBag className="h-4 w-4 text-[#8CC63F] shrink-0" />)
               )}
 
               {simulatedRole.modules.includes('compta') && (
-                <button
-                  onClick={() => setErpTab('compta')}
-                  className={`w-full text-left p-2 rounded-lg transition text-xs font-bold flex items-center gap-2.5 ${
-                    erpTab === 'compta' ? 'bg-[#1E7A44] text-white shadow-sm border-l-4 border-[#8CC63F]' : 'hover:bg-[#0F3D2E] hover:text-white'
-                  }`}
-                >
-                  <Book className="h-4 w-4 text-[#8CC63F]" /> Compta SYSCOHADA
-                </button>
+                renderSidebarTab('compta', 'Compta SYSCOHADA', <Book className="h-4 w-4 text-[#8CC63F] shrink-0" />)
               )}
 
               {(simulatedRole.modules.includes('rh') || simulatedRole.modules.includes('ged') || simulatedRole.modules.includes('settings')) && (
@@ -2652,37 +2778,39 @@ export default function App() {
               )}
 
               {simulatedRole.modules.includes('rh') && (
-                <button
-                  onClick={() => setErpTab('rh')}
-                  className={`w-full text-left p-2 rounded-lg transition text-xs font-bold flex items-center gap-2.5 ${
-                    erpTab === 'rh' ? 'bg-[#1E7A44] text-white shadow-sm border-l-4 border-[#8CC63F]' : 'hover:bg-[#0F3D2E] hover:text-white'
-                  }`}
-                >
-                  <Users className="h-4 w-4 text-[#8CC63F]" /> Ressources Humaines
-                </button>
+                renderSidebarTab('rh', 'Ressources Humaines', <Users className="h-4 w-4 text-[#8CC63F] shrink-0" />)
               )}
 
               {simulatedRole.modules.includes('ged') && (
-                <button
-                  onClick={() => setErpTab('ged')}
-                  className={`w-full text-left p-2 rounded-lg transition text-xs font-bold flex items-center gap-2.5 ${
-                    erpTab === 'ged' ? 'bg-[#1E7A44] text-white shadow-sm border-l-4 border-[#8CC63F]' : 'hover:bg-[#0F3D2E] hover:text-white'
-                  }`}
-                >
-                  <FolderOpen className="h-4 w-4 text-[#8CC63F]" /> Archivage GED
-                </button>
+                renderSidebarTab('ged', 'Archivage GED', <FolderOpen className="h-4 w-4 text-[#8CC63F] shrink-0" />)
               )}
 
               {simulatedRole.modules.includes('settings') && (
-                <button
-                  onClick={() => setErpTab('settings')}
-                  className={`w-full text-left p-2 transition text-xs font-bold flex items-center gap-2.5 rounded-lg ${
-                    erpTab === 'settings' ? 'bg-[#1E7A44] text-white shadow-sm border-l-4 border-[#8CC63F]' : 'hover:bg-[#0F3D2E] hover:text-[#8CC63F] text-zinc-350'
-                  }`}
-                >
-                  <Settings className="h-4 w-4 shrink-0 text-[#8CC63F]" /> Paramètres Système
-                </button>
+                renderSidebarTab('settings', 'Paramètres Système', <Settings className="h-4 w-4 shrink-0 text-[#8CC63F]" />)
               )}
+            </div>
+
+            {/* Quick Guide status banner in sidebar */}
+            <div className="bg-[#0F3D2E]/60 p-2.5 rounded-lg border border-[#8CC63F]/30 flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-[11px] font-bold text-white">
+                <HelpCircle className="h-3.5 w-3.5 text-[#8CC63F]" />
+                <span>Guide pas à pas</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsGuideActive(prev => {
+                    const next = !prev;
+                    localStorage.setItem('mefoup_guide_active', String(next));
+                    return next;
+                  });
+                }}
+                className={`text-[9.5px] font-black px-2 py-1 rounded transition cursor-pointer ${
+                  isGuideActive ? 'bg-[#8CC63F] text-[#0F3D2E]' : 'bg-slate-700 text-slate-300'
+                }`}
+              >
+                {isGuideActive ? 'ACTIVÉ' : 'DÉSACTIVÉ'}
+              </button>
             </div>
 
             {/* Friendly Mascot Advisor widget */}
@@ -2995,6 +3123,17 @@ export default function App() {
           <Terminal className="h-3.5 w-3.5" /> SECURE TRACEABILITY MODE • SYSTEM ACTIVE
         </span>
       </footer>
+
+      {/* INTERACTIVE STEP-BY-STEP TUTORIAL MODAL */}
+      <GuideDetailModal
+        item={selectedGuideItem}
+        isOpen={isGuideModalOpen}
+        onClose={() => setIsGuideModalOpen(false)}
+        onNavigateToTab={(tabKey) => {
+          setErpTab(tabKey as any);
+          setIsGuideModalOpen(false);
+        }}
+      />
     </div>
   );
 }

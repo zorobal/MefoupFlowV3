@@ -831,19 +831,17 @@ export default defineSchema({
         animalsCount: db.animaux?.length || 0,
         workersCount: db.employes?.length || 0,
         ledgerLength: db.factures?.length || db.piecesComptables?.length || 0,
-        invoicedAmount: db.factures?.reduce((acc: number, f: any) => acc + (f.totalTTC || f.montant || 0), 0) || 500000
+        invoicedAmount: db.factures?.reduce((acc: number, f: any) => acc + (f.totalTTC || f.montant || 0), 0) || 0
       };
     }
-    // Static estimation for previews
-    const seed = client.idLicence ? client.idLicence.charCodeAt(5) || 5 : 5;
-    const multiplier = (seed % 4) + 1;
+    // New or uninitialized database: return strictly empty statistics
     return {
-      farmsCount: Math.round(1 * multiplier) || 1,
-      parcellesCount: Math.round(allData.parcelles.length * multiplier) || 2,
-      animalsCount: Math.round(allData.animaux.length * multiplier) || 12,
-      workersCount: Math.round(allData.employes.length * multiplier) || 6,
-      ledgerLength: Math.round(allData.pieces.length * multiplier) || 5,
-      invoicedAmount: Math.round(850000 * multiplier)
+      farmsCount: 0,
+      parcellesCount: 0,
+      animalsCount: 0,
+      workersCount: 0,
+      ledgerLength: 0,
+      invoicedAmount: 0
     };
   };
 

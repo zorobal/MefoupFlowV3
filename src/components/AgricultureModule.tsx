@@ -1732,6 +1732,13 @@ export default function AgricultureModule({
                         </tr>
                       );
                     })}
+                    {filteredParcelles.length === 0 && (
+                      <tr>
+                        <td colSpan={9} className="p-8 text-center text-slate-400 italic text-xs">
+                          Aucune parcelle enregistrée pour ce filtre. Découpez un terrain pour ajouter une première parcelle.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1759,41 +1766,57 @@ export default function AgricultureModule({
                   </div>
                 </div>
 
-                <div className="border bg-emerald-50/30 rounded-lg h-52 flex items-center justify-center relative overflow-hidden">
-                  <div className="absolute inset-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] bg-[size:24px_24px]"></div>
-                  
-                  {/* Parcelle 1 (Obala - Agricole) */}
-                  <div className="absolute top-6 left-10 w-36 h-24 bg-emerald-600/20 border-2 border-emerald-600 rounded-lg flex items-center justify-center text-center p-1.5 shadow-xs">
-                    <div>
-                      <span className="text-[10px] font-mono font-bold text-emerald-900 block">P_OB-N1 (Obala)</span>
-                      <span className="text-[9px] text-emerald-700 font-bold block">🌱 Maïs Grain (12.5 ha)</span>
-                      <span className="text-[8px] text-emerald-600">Sol Humifère • pH 6.2</span>
+                {parcelles.length === 0 ? (
+                  <div className="border bg-emerald-50/20 rounded-lg p-8 flex flex-col items-center justify-center text-center relative overflow-hidden">
+                    <div className="absolute inset-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] bg-[size:24px_24px]"></div>
+                    <div className="relative z-10 space-y-1.5 max-w-md">
+                      <Compass className="h-8 w-8 text-emerald-600/60 mx-auto mb-1" />
+                      <span className="text-xs font-bold text-slate-800 block uppercase tracking-wider">Aucune parcelle sur le cadastre SIG</span>
+                      <p className="text-[11px] text-slate-500 leading-relaxed">
+                        Acquérez votre premier terrain dans "Domaines & Terrains", puis morcelez-le en parcelles pour afficher le cadastre cartographique de ce client.
+                      </p>
                     </div>
                   </div>
+                ) : (
+                  <div className="border bg-emerald-50/30 rounded-lg min-h-48 p-4 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] bg-[size:24px_24px]"></div>
+                    <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {parcelles.slice(0, 6).map((p) => {
+                        const parentChamp = champs.find(c => c.id === p.idChamp);
+                        const activeCult = cultures.find(c => c.idParcelle === p.id && c.statut === 'Active');
+                        const isPastoral = p.vocation === 'Pastorale';
+                        const isMixte = p.vocation === 'Mixte';
 
-                  {/* Parcelle 2 (Mbouda - Pastorale) */}
-                  <div className="absolute top-8 right-16 w-36 h-24 bg-amber-500/20 border-2 border-amber-600 rounded-lg flex items-center justify-center text-center p-1.5 shadow-xs">
-                    <div>
-                      <span className="text-[10px] font-mono font-bold text-amber-900 block">P_MBD-P1 (Mbouda)</span>
-                      <span className="text-[9px] text-amber-800 font-bold block">🐄 Troupeau Bovin (25 ha)</span>
-                      <span className="text-[8px] text-amber-700">Pâturage Intensif • pH 5.8</span>
+                        return (
+                          <div
+                            key={p.id}
+                            className={`p-3 rounded-xl border shadow-xs flex flex-col justify-between ${
+                              isPastoral
+                                ? 'bg-amber-50 border-amber-300 text-amber-900'
+                                : isMixte
+                                ? 'bg-teal-50 border-teal-300 text-teal-900'
+                                : 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                            }`}
+                          >
+                            <div>
+                              <span className="text-[10px] font-mono font-bold block">{p.code} {parentChamp ? `(${parentChamp.ville})` : ''}</span>
+                              <span className="text-[10px] font-bold block mt-0.5">
+                                {isPastoral ? `🐄 ${p.troupeauAffecte || 'Pâturage pastoral'}` : activeCult ? `🌱 ${activeCult.nom} (${p.surface} ha)` : `🌾 ${p.nom} (${p.surface} ha)`}
+                              </span>
+                              <span className="text-[9px] opacity-80 block">{p.typeSol || 'Sol cultivable'} • pH {p.ph || 6.5}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-3 flex justify-end">
+                      <div className="inline-flex items-center gap-1.5 text-[10px] text-slate-700 bg-white/95 px-2.5 py-1 rounded-md border shadow-xs relative z-10">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        SIG Foncier : {parcelles.length} parcelle{parcelles.length > 1 ? 's' : ''} enregistrée{parcelles.length > 1 ? 's' : ''}
+                      </div>
                     </div>
                   </div>
-
-                  {/* Parcelle 3 (Bafia - Arboriculture) */}
-                  <div className="absolute bottom-4 left-44 w-44 h-16 bg-teal-600/20 border-2 border-teal-600 rounded-lg flex items-center justify-center text-center p-1 shadow-xs">
-                    <div>
-                      <span className="text-[10px] font-mono font-bold text-teal-900 block">P_BAF-C1 (Bafia)</span>
-                      <span className="text-[9px] text-teal-800 font-bold block">🌿 Cacao Forastero (35 ha)</span>
-                      <span className="text-[8px] text-teal-700">Agroforesterie • pH 6.0</span>
-                    </div>
-                  </div>
-
-                  <div className="absolute bottom-3 right-6 flex items-center gap-1.5 text-[10px] text-slate-700 bg-white/95 px-2.5 py-1 rounded-md border shadow-xs">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    SIG Coopératif Multi-Sites Actif
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           );
@@ -1803,6 +1826,21 @@ export default function AgricultureModule({
         {activeTab === 'cultures' && (
           <div className="space-y-4">
             <h3 className="font-bold text-slate-800 text-sm">Cycles de Cultures Actifs</h3>
+            {cultures.length === 0 ? (
+              <div className="p-12 text-center bg-slate-50/50 rounded-2xl border border-dashed">
+                <Sprout className="h-10 w-10 text-emerald-400 mx-auto mb-2" />
+                <h4 className="text-slate-700 font-bold text-xs uppercase mb-1">Aucun cycle cultural enregistré</h4>
+                <p className="text-slate-400 text-[11px] max-w-sm mx-auto mb-4">
+                  Aucune culture n'est actuellement implantée sur vos parcelles.
+                </p>
+                <button
+                  onClick={() => setShowAddCulture(true)}
+                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold"
+                >
+                  Enregistrer une Nouvelle Culture
+                </button>
+              </div>
+            ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {cultures.map((c) => {
                 const totalCost = interventions
@@ -1875,6 +1913,7 @@ export default function AgricultureModule({
                 );
               })}
             </div>
+            )}
 
             {/* CAHIER CULTURAL CHRONOLOGICAL GRAPH & TRAIL - EXPERT INTERACTIVE PANEL */}
             {selectedCahierCultId && (() => {
