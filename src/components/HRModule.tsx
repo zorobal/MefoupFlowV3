@@ -38,6 +38,7 @@ interface HRModuleProps {
   onAddPresence: (pres: PresencePointage) => void;
   onAddBulletin: (bp: BulletinPaie) => void;
   customLabels?: any;
+  tenantId?: string;
 }
 
 export default function HRModule({
@@ -47,12 +48,14 @@ export default function HRModule({
   onAddEmploye,
   onAddPresence,
   onAddBulletin,
-  customLabels
+  customLabels,
+  tenantId: propTenantId
 }: HRModuleProps) {
   const [activeTab, setActiveTab] = useState<'liste' | 'contrats' | 'variables' | 'presences' | 'calculateur' | 'bulletins'>('liste');
 
   // Multi-tenant scoped prefix key generator
   const getTenantId = () => {
+    if (propTenantId) return propTenantId;
     try {
       const saved = localStorage.getItem('activeTenant');
       if (saved) {
@@ -73,70 +76,35 @@ export default function HRModule({
     if (saved) {
       try { return JSON.parse(saved); } catch (e) {}
     }
-    // Prefabricated contracts linked to existing initial employees
-    return [
-      {
-        id: 'cont-1',
-        idEmploye: 'emp-1',
-        typeCONTRAT: 'CDI',
-        dateDebut: '2023-01-15',
-        salaireBaseBrut: 450000,
-        indemniteLogement: 50000,
-        indemniteTransport: 25000,
-        allocationsFamiliales: 4500,
-        statut: 'Actif',
-        dateSignature: '2023-01-12'
-      },
-      {
-        id: 'cont-2',
-        idEmploye: 'emp-2',
-        typeCONTRAT: 'CDI',
-        dateDebut: '2020-04-01',
-        salaireBaseBrut: 250000,
-        indemniteLogement: 30000,
-        indemniteTransport: 15000,
-        allocationsFamiliales: 9000,
-        statut: 'Actif',
-        dateSignature: '2020-03-25'
-      },
-      {
-        id: 'cont-3',
-        idEmploye: 'emp-3',
-        typeCONTRAT: 'CDI',
-        dateDebut: '2021-08-10',
-        salaireBaseBrut: 180000,
-        indemniteLogement: 20000,
-        indemniteTransport: 10000,
-        allocationsFamiliales: 13500,
-        statut: 'Actif',
-        dateSignature: '2021-08-05'
-      },
-      {
-        id: 'cont-4',
-        idEmploye: 'emp-4',
-        typeCONTRAT: 'CDD',
-        dateDebut: '2025-03-01',
-        dateFin: '2026-03-01',
-        salaireBaseBrut: 120000,
-        indemniteLogement: 10000,
-        indemniteTransport: 5000,
-        allocationsFamiliales: 0,
-        statut: 'Actif',
-        dateSignature: '2025-02-28'
-      },
-      {
-        id: 'cont-5',
-        idEmploye: 'emp-5',
-        typeCONTRAT: 'CDI',
-        dateDebut: '2024-02-15',
-        salaireBaseBrut: 200000,
-        indemniteLogement: 25000,
-        indemniteTransport: 12000,
-        allocationsFamiliales: 4500,
-        statut: 'Actif',
-        dateSignature: '2024-02-10'
-      }
-    ];
+    if (tenantId === 'client-1') {
+      return [
+        {
+          id: 'cont-1',
+          idEmploye: 'emp-1',
+          typeCONTRAT: 'CDI',
+          dateDebut: '2023-01-15',
+          salaireBaseBrut: 450000,
+          indemniteLogement: 50000,
+          indemniteTransport: 25000,
+          allocationsFamiliales: 4500,
+          statut: 'Actif',
+          dateSignature: '2023-01-12'
+        },
+        {
+          id: 'cont-2',
+          idEmploye: 'emp-2',
+          typeCONTRAT: 'CDI',
+          dateDebut: '2020-04-01',
+          salaireBaseBrut: 250000,
+          indemniteLogement: 30000,
+          indemniteTransport: 15000,
+          allocationsFamiliales: 9000,
+          statut: 'Actif',
+          dateSignature: '2020-03-25'
+        }
+      ];
+    }
+    return [];
   });
 
   const [variables, setVariables] = useState<ElementVariablePaie[]>(() => {
@@ -145,21 +113,65 @@ export default function HRModule({
     if (saved) {
       try { return JSON.parse(saved); } catch (e) {}
     }
-    return [
-      { id: 'v-1', idEmploye: 'emp-1', periode: '06-2026', heuresSup130: 4, heuresSup140: 2, primesRendement: 35000, indemniteDeplacements: 15000, avancesRemboursements: 0, joursAbsenceNonJustifiee: 0 },
-      { id: 'v-2', idEmploye: 'emp-2', periode: '06-2026', heuresSup130: 8, heuresSup140: 4, primesRendement: 15000, indemniteDeplacements: 5500, avancesRemboursements: 10000, joursAbsenceNonJustifiee: 1 },
-      { id: 'v-3', idEmploye: 'emp-3', periode: '06-2026', heuresSup130: 0, heuresSup140: 0, primesRendement: 20000, indemniteDeplacements: 0, avancesRemboursements: 15000, joursAbsenceNonJustifiee: 0 }
-    ];
+    if (tenantId === 'client-1') {
+      return [
+        { id: 'v-1', idEmploye: 'emp-1', periode: '06-2026', heuresSup130: 4, heuresSup140: 2, primesRendement: 35000, indemniteDeplacements: 15000, avancesRemboursements: 0, joursAbsenceNonJustifiee: 0 }
+      ];
+    }
+    return [];
   });
 
-  // Keep lists synced with localstorage context of current active tenant
+  // Reload contracts and variables on tenant change
   useEffect(() => {
-    localStorage.setItem(`ka_contrats_${tenantId}`, JSON.stringify(contrats));
-  }, [contrats, tenantId]);
+    const keyContrats = `ka_contrats_${tenantId}`;
+    const savedContrats = localStorage.getItem(keyContrats);
+    if (savedContrats) {
+      try { setContrats(JSON.parse(savedContrats)); } catch (e) {}
+    } else {
+      setContrats(tenantId === 'client-1' ? [
+        {
+          id: 'cont-1',
+          idEmploye: 'emp-1',
+          typeCONTRAT: 'CDI',
+          dateDebut: '2023-01-15',
+          salaireBaseBrut: 450000,
+          indemniteLogement: 50000,
+          indemniteTransport: 25000,
+          allocationsFamiliales: 4500,
+          statut: 'Actif',
+          dateSignature: '2023-01-12'
+        }
+      ] : []);
+    }
+
+    const keyVars = `ka_variables_${tenantId}`;
+    const savedVars = localStorage.getItem(keyVars);
+    if (savedVars) {
+      try { setVariables(JSON.parse(savedVars)); } catch (e) {}
+    } else {
+      setVariables(tenantId === 'client-1' ? [
+        { id: 'v-1', idEmploye: 'emp-1', periode: '06-2026', heuresSup130: 4, heuresSup140: 2, primesRendement: 35000, indemniteDeplacements: 15000, avancesRemboursements: 0, joursAbsenceNonJustifiee: 0 }
+      ] : []);
+    }
+  }, [tenantId]);
+
+  const currentTenantRef = React.useRef(tenantId);
+  useEffect(() => {
+    currentTenantRef.current = tenantId;
+  }, [tenantId]);
+
+  // Keep lists synced with localstorage context of current active tenant safely
+  useEffect(() => {
+    if (tenantId && currentTenantRef.current === tenantId) {
+      localStorage.setItem(`ka_contrats_${tenantId}`, JSON.stringify(contrats));
+    }
+  }, [contrats]);
 
   useEffect(() => {
-    localStorage.setItem(`ka_variables_${tenantId}`, JSON.stringify(variables));
-  }, [variables, tenantId]);
+    if (tenantId && currentTenantRef.current === tenantId) {
+      localStorage.setItem(`ka_variables_${tenantId}`, JSON.stringify(variables));
+    }
+  }, [variables]);
 
   // Modals Visibility
   const [showAddEmp, setShowAddEmploye] = useState(false);

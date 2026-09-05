@@ -20,7 +20,9 @@ import {
   TableauDeBord,
   RapportProgramme,
   AlerteBI,
-  RequetePersonnalisee
+  RequetePersonnalisee,
+  CarnetSanitaire,
+  FuelLog
 } from '../types';
 import {
   TrendingUp,
@@ -47,7 +49,8 @@ import {
   Heart,
   Sliders,
   Sparkles,
-  Inbox
+  Inbox,
+  Sprout
 } from 'lucide-react';
 
 interface BIModuleProps {
@@ -67,6 +70,8 @@ interface BIModuleProps {
   maintenances: MaintenanceOrder[];
   // Fleet modules extra arrays
   pannesEquipement: PanneEquipement[];
+  carnetsSanitaires?: CarnetSanitaire[];
+  fuelLogs?: FuelLog[];
   
   // BI persistence hooks
   indicateursKPI: IndicateurKPI[];
@@ -79,6 +84,7 @@ interface BIModuleProps {
   setAlertesBI: React.Dispatch<React.SetStateAction<AlerteBI[]>>;
   requetesPerso: RequetePersonnalisee[];
   setRequetesPerso: React.Dispatch<React.SetStateAction<RequetePersonnalisee[]>>;
+  tenantId?: string;
 }
 
 export default function BIModule({
@@ -96,6 +102,9 @@ export default function BIModule({
   equipements = [],
   maintenances = [],
   pannesEquipement = [],
+  carnetsSanitaires = [],
+  fuelLogs = [],
+  tenantId,
   
   indicateursKPI = [],
   setIndicateursKPI,
@@ -161,8 +170,8 @@ export default function BIModule({
 
     const netMargin = totalSales - totalExpenses;
     
-    // Available Treasury: Standard treasury account sum (e.g. 521 Debit minus credit)
-    const treasuryAvailable = 4500000 + paidSales - totalExpenses; 
+    // Available Treasury: Cash/Bank collections minus expenses
+    const treasuryAvailable = paidSales - totalExpenses; 
 
     return { totalSales, paidSales, unpaidSales, totalExpenses, netMargin, treasuryAvailable };
   };
@@ -175,7 +184,7 @@ export default function BIModule({
     
     // total harvests weight
     const totalMaizHarvested = mouvementsStock
-      .filter(m => m.motif?.toLowerCase().includes('récolte') && m.idArticle === 'art-1')
+      .filter(m => m.motif?.toLowerCase().includes('récolte'))
       .reduce((acc, m) => acc + m.quantite, 0);
 
     const averageYieldPerHa = totalHectares > 0 ? Math.round(totalMaizHarvested / totalHectares) : 0;
@@ -190,10 +199,10 @@ export default function BIModule({
     
     // Mortality: Animals with state Deceased or sold
     const deceasedCount = animaux.filter(a => a.statut === 'Décédé' || a.statut === 'Réformé').length; // real count
-    const mortalityRate = totalHeads > 0 ? parseFloat(((deceasedCount / totalHeads) * 100).toFixed(1)) : 1.8;
+    const mortalityRate = totalHeads > 0 ? parseFloat(((deceasedCount / totalHeads) * 100).toFixed(1)) : 0;
     
     // Average weight
-    const averageWeight = totalHeads > 0 ? Math.round(animaux.reduce((acc, a) => acc + (a.poidsActuel || 75), 0) / totalHeads) : 180;
+    const averageWeight = totalHeads > 0 ? Math.round(animaux.reduce((acc, a) => acc + (a.poidsActuel || 0), 0) / totalHeads) : 0;
 
     return { totalHeads, activeTroupeaux, mortalityRate, averageWeight };
   };
@@ -204,7 +213,7 @@ export default function BIModule({
     const availableEngines = equipements.filter(e => e.etat === 'En service').length;
     const activeBreakdownsCount = pannesEquipement.length;
 
-    let availablePercent = totalEngines > 0 ? Math.round((availableEngines / totalEngines) * 100) : 90;
+    let availablePercent = totalEngines > 0 ? Math.round((availableEngines / totalEngines) * 100) : 0;
     return { totalEngines, availableEngines, activeBreakdownsCount, availablePercent };
   };
 
@@ -437,7 +446,10 @@ export default function BIModule({
                         <strong className="text-slate-800">{fin.totalSales.toLocaleString()} FCFA</strong>
                       </div>
                       <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-emerald-500" style={{ width: '85%' }}></div>
+                        <div
+                          className="h-full bg-emerald-500 transition-all duration-500"
+                          style={{ width: `${Math.min(100, Math.max(0, fin.totalSales > 0 ? 100 : 0))}%` }}
+                        ></div>
                       </div>
                     </div>
 
@@ -448,7 +460,12 @@ export default function BIModule({
                         <strong className="text-slate-800">{fin.totalExpenses.toLocaleString()} FCFA</strong>
                       </div>
                       <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-red-500" style={{ width: '48%' }}></div>
+                        <div
+                          className="h-full bg-red-500 transition-all duration-500"
+                          style={{
+                            width: `${fin.totalSales > 0 ? Math.min(100, Math.round((fin.totalExpenses / fin.totalSales) * 100)) : (fin.totalExpenses > 0 ? 100 : 0)}%`
+                          }}
+                        ></div>
                       </div>
                     </div>
 
@@ -456,10 +473,17 @@ export default function BIModule({
                     <div className="space-y-1">
                       <div className="flex justify-between text-xs">
                         <span className="text-slate-600 font-medium">Marge Nette Consolidée</span>
-                        <strong className="text-indigo-700 font-extrabold">{fin.netMargin.toLocaleString()} FCFA</strong>
+                        <strong className={`${fin.netMargin >= 0 ? 'text-indigo-700' : 'text-red-600'} font-extrabold`}>
+                          {fin.netMargin.toLocaleString()} FCFA
+                        </strong>
                       </div>
                       <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-indigo-600" style={{ width: '55%' }}></div>
+                        <div
+                          className={`h-full ${fin.netMargin >= 0 ? 'bg-indigo-600' : 'bg-red-500'} transition-all duration-500`}
+                          style={{
+                            width: `${fin.totalSales > 0 ? Math.min(100, Math.max(0, Math.round((fin.netMargin / fin.totalSales) * 100))) : 0}%`
+                          }}
+                        ></div>
                       </div>
                     </div>
                   </div>
@@ -467,55 +491,38 @@ export default function BIModule({
 
                 <div className="bg-white p-5 rounded-xl border border-slate-200 flex flex-col justify-between">
                   <h4 className="text-xs font-extrabold uppercase text-slate-500 tracking-wider">Répartition Hectare Cultivée par Végétal</h4>
-                  <div className="flex items-center justify-center p-4">
-                    {/* Interactive vector pie donut */}
-                    <svg className="w-32 h-32" viewBox="0 0 36 36">
-                      <path
-                        className="text-emerald-100"
-                        strokeWidth="3.5"
-                        stroke="currentColor"
-                        fill="none"
-                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                      />
-                      <path
-                        className="text-emerald-500"
-                        strokeWidth="4"
-                        strokeDasharray="45, 100"
-                        strokeLinecap="round"
-                        stroke="currentColor"
-                        fill="none"
-                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                      />
-                      <path
-                        className="text-amber-500"
-                        strokeWidth="4"
-                        strokeDasharray="30, 100"
-                        strokeDashoffset="-45"
-                        strokeLinecap="round"
-                        stroke="currentColor"
-                        fill="none"
-                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                      />
-                      <text x="18" y="20.35" className="text-[5px] font-bold text-slate-700 font-sans" textAnchor="middle" fill="currentColor">
-                        Cameroun
-                      </text>
-                    </svg>
-
-                    <div className="ml-6 space-y-1.5 text-xs">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-                        <span className="text-slate-600">Maïs Grain (45%)</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-                        <span className="text-slate-600">Cacao (30%)</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-slate-300"></span>
-                        <span className="text-slate-600">Jachère/Autres (25%)</span>
+                  {cultures.filter(c => c.statut === 'Active').length === 0 ? (
+                    <div className="p-8 text-center text-slate-400 text-xs italic flex flex-col items-center justify-center gap-2">
+                      <Sprout className="h-8 w-8 text-slate-300" />
+                      <span>Aucune culture active n'est enregistrée pour le moment.</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center p-4">
+                      {/* Dynamic list of crops */}
+                      <div className="w-full space-y-2 text-xs">
+                        {cultures.filter(c => c.statut === 'Active').map((cult, idx) => {
+                          const totalSurface = cultures.filter(c => c.statut === 'Active').reduce((s, c) => s + (c.surfaceCultivee || 0), 0);
+                          const pct = totalSurface > 0 ? Math.round(((cult.surfaceCultivee || 0) / totalSurface) * 100) : 0;
+                          const colors = ['bg-emerald-500', 'bg-amber-500', 'bg-indigo-500', 'bg-cyan-500', 'bg-purple-500'];
+                          const color = colors[idx % colors.length];
+                          return (
+                            <div key={cult.id} className="space-y-1">
+                              <div className="flex justify-between font-semibold text-slate-700">
+                                <span className="flex items-center gap-1.5">
+                                  <span className={`w-2.5 h-2.5 rounded-full ${color}`}></span>
+                                  {cult.nom}
+                                </span>
+                                <span>{cult.surfaceCultivee || 0} ha ({pct}%)</span>
+                              </div>
+                              <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                                <div className={`h-full ${color}`} style={{ width: `${pct}%` }}></div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -528,62 +535,83 @@ export default function BIModule({
                 <Sparkles className="h-4 w-4 text-emerald-600" /> Analyse de Rendement culturale par parcelle (Campagne en cours)
               </h3>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs text-left border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-100 font-bold text-[10px] text-slate-500 uppercase">
-                        <th className="p-3">Parcelle cible</th>
-                        <th className="p-3">Culture active</th>
-                        <th className="p-3">Surface (HA)</th>
-                        <th className="p-3">Rendement estimé</th>
-                        <th className="p-3 text-right">Marge brute / HA</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {parcelles.map(p => {
-                        const cult = cultures.find(c => c.idParcelle === p.id) || cultures[0];
-                        return (
-                          <tr key={p.id}>
-                            <td className="p-3 font-semibold text-slate-800">{p.nom}</td>
-                            <td className="p-3">
-                              <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded-md font-bold text-[10px]">
-                                {cult?.nom || 'Agrumes'}
-                              </span>
-                            </td>
-                            <td className="p-3 text-slate-600">{p.surface} HA</td>
-                            <td className="p-3 font-bold text-slate-800">{p.surface * 2.5} Tonnes</td>
-                            <td className="p-3 text-right text-emerald-600 font-extrabold">{(350000 * p.surface).toLocaleString()} FCFA</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+              {parcelles.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 text-xs italic bg-slate-50 rounded-xl border border-dashed">
+                  Aucune parcelle n'est encore configurée dans cette exploitation.
                 </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-100 font-bold text-[10px] text-slate-500 uppercase">
+                          <th className="p-3">Parcelle cible</th>
+                          <th className="p-3">Vocation / Culture</th>
+                          <th className="p-3">Surface (HA)</th>
+                          <th className="p-3 text-right">Rattachement</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {parcelles.map(p => {
+                          const cult = cultures.find(c => c.idParcelle === p.id && c.statut === 'Active');
+                          return (
+                            <tr key={p.id}>
+                              <td className="p-3 font-semibold text-slate-800">{p.nom}</td>
+                              <td className="p-3">
+                                {p.vocation === 'Pastorale' ? (
+                                  <span className="px-1.5 py-0.5 bg-amber-50 text-amber-800 rounded-md font-bold text-[10px]">
+                                    🐄 Élevage ({p.troupeauAffecte || 'Pâturage'})
+                                  </span>
+                                ) : cult ? (
+                                  <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded-md font-bold text-[10px]">
+                                    🌱 {cult.nom}
+                                  </span>
+                                ) : (
+                                  <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded-md font-medium text-[10px]">
+                                    Non emblavée / Repos
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-3 text-slate-600">{p.surface} HA</td>
+                              <td className="p-3 text-right text-slate-500 font-mono text-[10px]">{p.code}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
 
-                {/* SVG Visual Yield columns */}
-                <div className="bg-slate-50 p-4 rounded-lg flex flex-col justify-between">
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
-                      Rendements Cumulés Campagne (Tonnes)
-                    </span>
-                    <div className="flex items-end gap-5 h-36 pt-4 pb-2 justify-around">
-                      <div className="flex flex-col items-center gap-1.5">
-                        <div className="w-6 bg-emerald-500 rounded-t h-28 flex items-center justify-center text-[9px] text-white font-bold">28t</div>
-                        <span className="text-[9px] text-slate-500 font-medium">Maïs Obala</span>
-                      </div>
-                      <div className="flex flex-col items-center gap-1.5">
-                        <div className="w-6 bg-amber-500 rounded-t h-16 flex items-center justify-center text-[9px] text-white font-bold">12t</div>
-                        <span className="text-[9px] text-slate-500 font-medium">Cacao Centre</span>
-                      </div>
-                      <div className="flex flex-col items-center gap-1.5">
-                        <div className="w-6 bg-indigo-500 rounded-t h-10 flex items-center justify-center text-[9px] text-white font-bold">6t</div>
-                        <span className="text-[9px] text-slate-500 font-medium">Maraîchers</span>
-                      </div>
+                  {/* Dynamic Harvest Volumes */}
+                  <div className="bg-slate-50 p-4 rounded-lg flex flex-col justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                        Rendements Cumulés Campagne (Mouvements de Récolte)
+                      </span>
+                      {mouvementsStock.filter(m => m.motif?.toLowerCase().includes('récolte')).length === 0 ? (
+                        <div className="h-36 flex flex-col items-center justify-center text-center text-xs text-slate-400">
+                          <span>Aucun mouvement de récolte n'a encore été enregistré.</span>
+                        </div>
+                      ) : (
+                        <div className="space-y-3 pt-2">
+                          {articles
+                            .filter(a => mouvementsStock.some(m => m.idArticle === a.id && m.motif?.toLowerCase().includes('récolte')))
+                            .map(art => {
+                              const totalArt = mouvementsStock
+                                .filter(m => m.idArticle === art.id && m.motif?.toLowerCase().includes('récolte'))
+                                .reduce((s, m) => s + m.quantite, 0);
+                              return (
+                                <div key={art.id} className="flex justify-between items-center text-xs p-2 bg-white rounded border">
+                                  <span className="font-semibold text-slate-700">{art.nom}</span>
+                                  <strong className="text-emerald-700">{totalArt} {art.unite || 'Kg'}</strong>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
 
@@ -604,25 +632,27 @@ export default function BIModule({
                 <div className="p-4 bg-slate-50 rounded-lg border border-slate-100 text-center">
                   <span className="text-[10px] text-slate-400 uppercase font-bold block">Poids Moyen (GMQ)</span>
                   <span className="text-2xl font-bold text-slate-800 block mt-1">{elv.averageWeight} Kg</span>
-                  <span className="text-[9px] text-green-600 font-semibold block mt-0.5">+4.5% vs mois précédent</span>
+                  <span className="text-[9px] text-slate-500">Basé sur les pesées enregistrées</span>
                 </div>
 
                 <div className="p-4 bg-slate-50 rounded-lg border border-slate-100 text-center">
                   <span className="text-[10px] text-slate-400 uppercase font-bold block">Interventions Vétérinaires</span>
-                  <span className="text-2xl font-bold text-indigo-700 block mt-1">12 fiches</span>
-                  <span className="text-[9px] text-slate-500">Alerte prophylaxie active</span>
+                  <span className="text-2xl font-bold text-indigo-700 block mt-1">{carnetsSanitaires.length} fiches</span>
+                  <span className="text-[9px] text-slate-500">Carnets sanitaires actifs</span>
                 </div>
               </div>
 
-              <div className="p-4 bg-rose-50/50 rounded-lg border border-rose-100 flex items-center justify-between text-xs">
+              <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-rose-600" />
+                  <Heart className="h-5 w-5 text-emerald-600" />
                   <div className="text-slate-700 font-semibold">
-                    Zoonoses surveillées : 0 foyers de peste porcine déclenchés dans la zone d'Obala.
+                    {animaux.length === 0
+                      ? "Aucun cheptel enregistré sur cette instance."
+                      : `${animaux.length} animaux répartis dans ${troupeaux.length} troupeaux / lots suivis.`}
                   </div>
                 </div>
-                <span className="text-[10px] bg-emerald-600 text-white font-bold px-1.5 py-0.5 rounded">
-                  OK
+                <span className="text-[10px] bg-emerald-600 text-white font-bold px-2 py-0.5 rounded">
+                  {animaux.length > 0 ? 'CONFORME' : 'EN ATTENTE'}
                 </span>
               </div>
             </div>
@@ -642,20 +672,22 @@ export default function BIModule({
                     <strong className="text-slate-800">{flt.availablePercent}% d'actifs</strong>
                   </div>
                   <div className="flex justify-between text-xs items-center p-2.5 bg-slate-50 border rounded-lg">
-                    <span className="text-slate-600 font-medium">Total engins de traction</span>
+                    <span className="text-slate-600 font-medium">Total engins et matériels</span>
                     <strong className="text-slate-800">{flt.totalEngines} unités</strong>
                   </div>
                   <div className="flex justify-between text-xs items-center p-2.5 bg-slate-50 border rounded-lg">
                     <span className="text-slate-600 font-medium">Cumul Maintenance (GMAO Clôturé)</span>
-                    <strong className="text-indigo-700">125,000 FCFA</strong>
+                    <strong className="text-indigo-700">
+                      {maintenances.reduce((acc, m) => acc + (m.coutReel || 0), 0).toLocaleString()} FCFA
+                    </strong>
                   </div>
                 </div>
 
                 <div className="p-4 bg-slate-900 text-slate-100 rounded-xl space-y-2 font-mono text-[11px]">
                   <div className="text-[10px] text-slate-400 border-b border-slate-700 pb-1 uppercase font-bold">Console Fiabilité GMAO</div>
-                  <div>MTBF Global : 450 Heures de fonctionnement</div>
-                  <div>MTTR Moyen : 48 Heures d'immobilisation corrective</div>
-                  <div>Rapport Prév vs Cur : 100% Préventif</div>
+                  <div>Pannes actives signalées : {flt.activeBreakdownsCount}</div>
+                  <div>Interventions de maintenance : {maintenances.length}</div>
+                  <div>Consommation carburant enregistrée : {fuelLogs.reduce((s, f) => s + (f.quantiteLitres || 0), 0)} L</div>
                 </div>
               </div>
             </div>
@@ -682,12 +714,14 @@ export default function BIModule({
                   <tbody className="divide-y divide-slate-100">
                     {budgets.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="p-6 text-center text-slate-400">Aucune enveloppe de budget paramétrée sur cet exercice.</td>
+                        <td colSpan={5} className="p-6 text-center text-slate-400 italic">
+                          Aucune enveloppe de budget paramétrée sur cet exercice.
+                        </td>
                       </tr>
                     ) : (
                       budgets.map(b => {
                         const remaining = b.montantInitial - b.montantEngage;
-                        const prc = Math.round((b.montantEngage / b.montantInitial) * 100);
+                        const prc = b.montantInitial > 0 ? Math.round((b.montantEngage / b.montantInitial) * 100) : 0;
                         return (
                           <tr key={b.id}>
                             <td className="p-3 font-semibold text-slate-800">{b.departement}</td>
@@ -715,7 +749,7 @@ export default function BIModule({
           {activeBoard === 'stocks' && (
             <div className="bg-white p-6 rounded-xl border border-slate-200 space-y-4">
               <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-                <Table className="h-4 w-4 text-teal-600" /> Valorisation des Stocks & Lots proches de Péremption
+                <Table className="h-4 w-4 text-teal-600" /> Valorisation des Stocks & Lots de Magasins
               </h3>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -723,26 +757,40 @@ export default function BIModule({
                   <div className="p-4 bg-slate-50 border rounded-xl">
                     <span className="text-[10px] text-slate-400 uppercase font-bold block">Valorisation Instantanée</span>
                     <strong className="text-xl font-bold text-slate-800">{stk.totalStockValue.toLocaleString()} FCFA</strong>
-                    <p className="text-[9px] text-slate-500 mt-1">Calculé au coût de revient unitaire pondéré du grand livre</p>
+                    <p className="text-[9px] text-slate-500 mt-1">Calculé au coût d'achat unitaire pondéré du grand livre</p>
                   </div>
 
                   <div className="flex justify-between items-center bg-teal-50 border border-teal-200 text-teal-800 p-3 rounded-lg text-xs font-semibold">
-                    <span>Alerte Ruptures Stock : 0 articles en sous-seuil critique !</span>
-                    <span className="px-1.5 py-0.5 bg-emerald-600 text-white rounded font-bold text-[9px]">SÉCURISÉ</span>
+                    <span>Articles répertoriés en catalogue : {articles.length}</span>
+                    <span className="px-1.5 py-0.5 bg-emerald-600 text-white rounded font-bold text-[9px]">
+                      {articles.length > 0 ? 'ACTIF' : 'VIDE'}
+                    </span>
                   </div>
                 </div>
 
                 <div className="bg-slate-50 p-4 rounded-xl border border-dotted border-slate-300 text-xs space-y-3">
-                  <span className="font-bold text-slate-700 block uppercase text-[10px]">Lots Proches Péremption</span>
+                  <span className="font-bold text-slate-700 block uppercase text-[10px]">État des Mouvements de Magasin</span>
                   
-                  {/* Mock items with dates */}
-                  <div className="p-2.5 bg-yellow-50 border border-yellow-200 rounded-lg text-xs">
-                    <div className="flex justify-between font-bold text-yellow-800">
-                      <span>NPK 20-10-10 Lot #OB-41A</span>
-                      <span>14-Nov-2026</span>
+                  {mouvementsStock.length === 0 ? (
+                    <p className="text-slate-400 italic text-center py-4">Aucun mouvement de stock enregistré sur cette instance.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {mouvementsStock.slice(0, 3).map(m => {
+                        const art = articles.find(a => a.id === m.idArticle);
+                        return (
+                          <div key={m.id} className="p-2 bg-white rounded border flex justify-between items-center">
+                            <div>
+                              <span className="font-bold text-slate-800 block">{art?.nom || 'Article'}</span>
+                              <span className="text-[10px] text-slate-400">{m.date} - {m.motif}</span>
+                            </div>
+                            <span className={`font-bold text-xs ${m.type === 'Entrée' ? 'text-emerald-700' : 'text-amber-700'}`}>
+                              {m.type === 'Entrée' ? '+' : '-'}{m.quantite}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <span className="text-[10px] text-slate-500 block">Délai avant péremption : ~140 jours</span>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>

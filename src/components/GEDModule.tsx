@@ -76,13 +76,15 @@ export default function GEDModule({ documents, onAddDocument }: GEDModuleProps) 
     if (saved) {
       try { return JSON.parse(saved); } catch (e) {}
     }
-    // Prefabricated starting versions correspond to existing mock files
-    return [
-      { id: 'v-1', idDocument: 'doc-1', version: 1, dateCreation: '2019-04-15', nomFichier: 'Autorisation_Exploitation_Obala_Prefet_v1.pdf', tailleMo: 2.4, urlFictive: '#', auteur: 'M. Tchanga', commentaire: 'Version originale approuvée par la préfecture.' },
-      { id: 'v-2', idDocument: 'doc-2', version: 1, dateCreation: '2026-03-05', nomFichier: 'Analyse_PhysicoChimique_Sol_Parcelle_N1_v1.pdf', tailleMo: 4.1, urlFictive: '#', auteur: 'Ondoa Jean-Pierre', commentaire: 'Analyse de référence sols Obala.' },
-      { id: 'v-3', idDocument: 'doc-3', version: 1, dateCreation: '2023-01-15', nomFichier: 'Contrat_CDI_Dr_Amadou_Diallo_Signe.pdf', tailleMo: 1.8, urlFictive: '#', auteur: 'SaaS Admin', commentaire: 'Contrat paraphé de Dr. Diallo.' },
-      { id: 'v-4', idDocument: 'doc-4', version: 1, dateCreation: '2026-05-18', nomFichier: 'Certificat_Vaccination_Bovin_Ministere_v1.pdf', tailleMo: 0.9, urlFictive: '#', auteur: 'Dr. Amadou Diallo', commentaire: 'Carnet de l’année courante.' }
-    ];
+    if (tenantId === 'client-1') {
+      return [
+        { id: 'v-1', idDocument: 'doc-1', version: 1, dateCreation: '2019-04-15', nomFichier: 'Autorisation_Exploitation_Obala_Prefet_v1.pdf', tailleMo: 2.4, urlFictive: '#', auteur: 'M. Tchanga', commentaire: 'Version originale approuvée par la préfecture.' },
+        { id: 'v-2', idDocument: 'doc-2', version: 1, dateCreation: '2026-03-05', nomFichier: 'Analyse_PhysicoChimique_Sol_Parcelle_N1_v1.pdf', tailleMo: 4.1, urlFictive: '#', auteur: 'Ondoa Jean-Pierre', commentaire: 'Analyse de référence sols Obala.' },
+        { id: 'v-3', idDocument: 'doc-3', version: 1, dateCreation: '2023-01-15', nomFichier: 'Contrat_CDI_Dr_Amadou_Diallo_Signe.pdf', tailleMo: 1.8, urlFictive: '#', auteur: 'SaaS Admin', commentaire: 'Contrat paraphé de Dr. Diallo.' },
+        { id: 'v-4', idDocument: 'doc-4', version: 1, dateCreation: '2026-05-18', nomFichier: 'Certificat_Vaccination_Bovin_Ministere_v1.pdf', tailleMo: 0.9, urlFictive: '#', auteur: 'Dr. Amadou Diallo', commentaire: 'Carnet de l’année courante.' }
+      ];
+    }
+    return [];
   });
 
   const [workflows, setWorkflows] = useState<DocumentWorkflow[]>(() => {
@@ -91,12 +93,15 @@ export default function GEDModule({ documents, onAddDocument }: GEDModuleProps) 
     if (saved) {
       try { return JSON.parse(saved); } catch (e) {}
     }
-    return [
-      { id: 'w-1', idDocument: 'doc-1', etapeActuelle: 'Approuvé', dateSoumission: '2019-04-15', approbateurCible: 'Super Admin', dateValidation: '2019-04-16', commentaireDecision: 'Autorisation conforme et valide.' },
-      { id: 'w-2', idDocument: 'doc-2', etapeActuelle: 'Approuvé', dateSoumission: '2026-03-05', approbateurCible: 'Vétérinaire Senior', dateValidation: '2026-03-06', commentaireDecision: 'pH adéquat pour cultures racines.' },
-      { id: 'w-3', idDocument: 'doc-3', etapeActuelle: 'Approuvé', dateSoumission: '2023-01-15', approbateurCible: 'Super Admin', dateValidation: '2023-01-15', commentaireDecision: 'CDI enregistré.' },
-      { id: 'w-4', idDocument: 'doc-4', etapeActuelle: 'Brouillon', approbateurCible: 'Dr. Diallo' }
-    ];
+    if (tenantId === 'client-1') {
+      return [
+        { id: 'w-1', idDocument: 'doc-1', etapeActuelle: 'Approuvé', dateSoumission: '2019-04-15', approbateurCible: 'Super Admin', dateValidation: '2019-04-16', commentaireDecision: 'Autorisation conforme et valide.' },
+        { id: 'w-2', idDocument: 'doc-2', etapeActuelle: 'Approuvé', dateSoumission: '2026-03-05', approbateurCible: 'Vétérinaire Senior', dateValidation: '2026-03-06', commentaireDecision: 'pH adéquat pour cultures racines.' },
+        { id: 'w-3', idDocument: 'doc-3', etapeActuelle: 'Approuvé', dateSoumission: '2023-01-15', approbateurCible: 'Super Admin', dateValidation: '2023-01-15', commentaireDecision: 'CDI enregistré.' },
+        { id: 'w-4', idDocument: 'doc-4', etapeActuelle: 'Brouillon', approbateurCible: 'Dr. Diallo' }
+      ];
+    }
+    return [];
   });
 
   const [signatures, setSignatures] = useState<DocumentSignature[]>(() => {
@@ -105,9 +110,12 @@ export default function GEDModule({ documents, onAddDocument }: GEDModuleProps) 
     if (saved) {
       try { return JSON.parse(saved); } catch (e) {}
     }
-    return [
-      { id: 's-1', idDocument: 'doc-1', signataire: 'Michel Tchanga', roleSignataire: 'Promoteur Principal', dateHeure: '2019-04-16 11:24', statutSignature: 'Signé', empreinteNumerique: 'a2f98bbcd7612c88f9e0134eaec11200fce9d2' }
-    ];
+    if (tenantId === 'client-1') {
+      return [
+        { id: 's-1', idDocument: 'doc-1', signataire: 'Michel Tchanga', roleSignataire: 'Promoteur Principal', dateHeure: '2019-04-16 11:24', statutSignature: 'Signé', empreinteNumerique: 'a2f98bbcd7612c88f9e0134eaec11200fce9d2' }
+      ];
+    }
+    return [];
   });
 
   const [links, setLinks] = useState<DocumentLink[]>(() => {
@@ -116,33 +124,48 @@ export default function GEDModule({ documents, onAddDocument }: GEDModuleProps) 
     if (saved) {
       try { return JSON.parse(saved); } catch (e) {}
     }
-    // Prefabricated links connecting documents to system entities polymorphically!
-    return [
-      { id: 'l-1', idDocument: 'doc-2', typeEntite: 'Parcelle', idEntite: 'par-1', dateLiaison: '2026-03-05', note: 'Associe à la parcelle principale maraîchère.' },
-      { id: 'l-2', idDocument: 'doc-3', typeEntite: 'Employe', idEntite: 'emp-1', dateLiaison: '2023-01-15', note: 'Dossier social du médecin vétérinaire.' },
-      { id: 'l-3', idDocument: 'doc-4', typeEntite: 'Animal', idEntite: 'an-1', dateLiaison: '2026-05-18', note: 'Vaccination bovin.' }
-    ];
+    if (tenantId === 'client-1') {
+      return [
+        { id: 'l-1', idDocument: 'doc-2', typeEntite: 'Parcelle', idEntite: 'par-1', dateLiaison: '2026-03-05', note: 'Associe à la parcelle principale maraîchère.' },
+        { id: 'l-2', idDocument: 'doc-3', typeEntite: 'Employe', idEntite: 'emp-1', dateLiaison: '2023-01-15', note: 'Dossier social du médecin vétérinaire.' },
+        { id: 'l-3', idDocument: 'doc-4', typeEntite: 'Animal', idEntite: 'an-1', dateLiaison: '2026-05-18', note: 'Vaccination bovin.' }
+      ];
+    }
+    return [];
   });
 
   // Pull auxiliary lists from local storage for polymorphic select linkages
   const [employeesList, setEmployeesList] = useState<Employe[]>([]);
   const [parcellesList, setParcellesList] = useState<Parcelle[]>([]);
 
+  const currentTenantRef = React.useRef(tenantId);
   useEffect(() => {
-    localStorage.setItem(`ka_ged_versions_${tenantId}`, JSON.stringify(versions));
-  }, [versions, tenantId]);
+    currentTenantRef.current = tenantId;
+  }, [tenantId]);
 
   useEffect(() => {
-    localStorage.setItem(`ka_ged_workflows_${tenantId}`, JSON.stringify(workflows));
-  }, [workflows, tenantId]);
+    if (tenantId && currentTenantRef.current === tenantId) {
+      localStorage.setItem(`ka_ged_versions_${tenantId}`, JSON.stringify(versions));
+    }
+  }, [versions]);
 
   useEffect(() => {
-    localStorage.setItem(`ka_ged_signatures_${tenantId}`, JSON.stringify(signatures));
-  }, [signatures, tenantId]);
+    if (tenantId && currentTenantRef.current === tenantId) {
+      localStorage.setItem(`ka_ged_workflows_${tenantId}`, JSON.stringify(workflows));
+    }
+  }, [workflows]);
 
   useEffect(() => {
-    localStorage.setItem(`ka_ged_links_${tenantId}`, JSON.stringify(links));
-  }, [links, tenantId]);
+    if (tenantId && currentTenantRef.current === tenantId) {
+      localStorage.setItem(`ka_ged_signatures_${tenantId}`, JSON.stringify(signatures));
+    }
+  }, [signatures]);
+
+  useEffect(() => {
+    if (tenantId && currentTenantRef.current === tenantId) {
+      localStorage.setItem(`ka_ged_links_${tenantId}`, JSON.stringify(links));
+    }
+  }, [links]);
 
   // Load target lists to build polymorphic select dropdown lists
   useEffect(() => {

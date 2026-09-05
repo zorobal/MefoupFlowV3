@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Magasin,
   Article,
@@ -65,6 +65,7 @@ interface StocksModuleProps {
   onAddMaintenance: (maint: MaintenanceOrder) => void;
   onAddFuelLog: (fuel: FuelLog) => void;
   customLabels?: any;
+  tenantId?: string;
 }
 
 export default function StocksModule({
@@ -80,8 +81,21 @@ export default function StocksModule({
   onAddMouvement,
   onAddMaintenance,
   onAddFuelLog,
-  customLabels
+  customLabels,
+  tenantId: propTenantId
 }: StocksModuleProps) {
+  const getEffectiveTenantId = () => {
+    if (propTenantId) return propTenantId;
+    try {
+      const saved = localStorage.getItem('activeTenant');
+      if (saved) {
+        return JSON.parse(saved).id || 'client-1';
+      }
+    } catch (e) {}
+    return 'client-1';
+  };
+  const activeTenantId = getEffectiveTenantId();
+
   const [activeTab, setActiveTab] = useState<'magasins' | 'enregistrer-mvt' | 'equipements' | 'maintenance' | 'carburant' | 'bio-stocks'>('bio-stocks');
 
   // Modal control state
@@ -110,59 +124,249 @@ export default function StocksModule({
   const [newFuelChauff, setNewFuelChauff] = useState('Etoa Sébastien');
 
   // ==========================================
-  // UNIFIED BIO-STOCKS CORE STATES & MOCK DATA
+  // UNIFIED BIO-STOCKS TENANT ISOLATED CORE STATES
   // ==========================================
 
-  const [produitsAgricoles, setProduitsAgricoles] = useState<ProduitAgricole[]>([
-    { id: 'pa-1', nom: 'Maïs Grain Séché', categorie: 'Végétal Brut', uniteReference: 'Kg', dureeConservationMax: 180, prixReferenceMarche: 350 },
-    { id: 'pa-2', nom: 'Banane Plantain Mûre', categorie: 'Végétal Brut', uniteReference: 'Sacs', dureeConservationMax: 15, prixReferenceMarche: 4500 },
-    { id: 'pa-3', nom: 'Lait Cru de Vache', categorie: 'Animal Continu', uniteReference: 'Litres', dureeConservationMax: 3, prixReferenceMarche: 650 },
-    { id: 'pa-4', nom: 'Œufs Frais Calibre L', categorie: 'Animal Continu', uniteReference: 'Douzaines', dureeConservationMax: 28, prixReferenceMarche: 1100 },
-    { id: 'pa-5', nom: 'Cacao Fèves Séchées', categorie: 'Végétal Brut', uniteReference: 'Kg', dureeConservationMax: 360, prixReferenceMarche: 2200 },
-    { id: 'pa-6', nom: 'Fromage Affiné Mbalmayo', categorie: 'Transformé', uniteReference: 'Kg', dureeConservationMax: 90, prixReferenceMarche: 5500 },
-    { id: 'pa-7', nom: 'Aliment Volaille Croissance', categorie: 'Transformé', uniteReference: 'Sacs', dureeConservationMax: 120, prixReferenceMarche: 18000 }
-  ]);
+  const [produitsAgricoles, setProduitsAgricoles] = useState<ProduitAgricole[]>(() => {
+    const key = `ka_bioprod_${activeTenantId}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    if (activeTenantId === 'client-1') {
+      return [
+        { id: 'pa-1', nom: 'Maïs Grain Séché', categorie: 'Végétal Brut', uniteReference: 'Kg', dureeConservationMax: 180, prixReferenceMarche: 350 },
+        { id: 'pa-2', nom: 'Banane Plantain Mûre', categorie: 'Végétal Brut', uniteReference: 'Sacs', dureeConservationMax: 15, prixReferenceMarche: 4500 },
+        { id: 'pa-3', nom: 'Lait Cru de Vache', categorie: 'Animal Continu', uniteReference: 'Litres', dureeConservationMax: 3, prixReferenceMarche: 650 },
+        { id: 'pa-4', nom: 'Œufs Frais Calibre L', categorie: 'Animal Continu', uniteReference: 'Douzaines', dureeConservationMax: 28, prixReferenceMarche: 1100 },
+        { id: 'pa-5', nom: 'Cacao Fèves Séchées', categorie: 'Végétal Brut', uniteReference: 'Kg', dureeConservationMax: 360, prixReferenceMarche: 2200 }
+      ];
+    }
+    return [];
+  });
 
-  const [lieuxDeStockage, setLieuxDeStockage] = useState<LieuDeStockage[]>([
-    { id: 'ls-1', nom: 'Silo Métallique A', type: 'Silo', capaciteMax: 20000, conditions: 'Ventilé à humidité contrôlée stable' },
-    { id: 'ls-2', nom: 'Tank Réfrigéré Tank-3', type: 'Tank à Lait', capaciteMax: 1500, conditions: 'Température constante 4°C, Agitation' },
-    { id: 'ls-3', nom: 'Chambre Froide Positive 1', type: 'Chambre Froide', capaciteMax: 5000, conditions: 'Température 3°C - 5°C, Hygrométrie 85%' },
-    { id: 'ls-4', nom: 'Hangar Central Sacs', type: 'Hangar', capaciteMax: 10000, conditions: 'Sur palettes, aération naturelle' }
-  ]);
+  const [lieuxDeStockage, setLieuxDeStockage] = useState<LieuDeStockage[]>(() => {
+    const key = `ka_biolieux_${activeTenantId}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    if (activeTenantId === 'client-1') {
+      return [
+        { id: 'ls-1', nom: 'Silo Métallique A', type: 'Silo', capaciteMax: 20000, conditions: 'Ventilé à humidité contrôlée stable' },
+        { id: 'ls-2', nom: 'Tank Réfrigéré Tank-3', type: 'Tank à Lait', capaciteMax: 1500, conditions: 'Température constante 4°C, Agitation' },
+        { id: 'ls-3', nom: 'Chambre Froide Positive 1', type: 'Chambre Froide', capaciteMax: 5000, conditions: 'Température 3°C - 5°C, Hygrométrie 85%' },
+        { id: 'ls-4', nom: 'Hangar Central Sacs', type: 'Hangar', capaciteMax: 10000, conditions: 'Sur palettes, aération naturelle' }
+      ];
+    }
+    return [];
+  });
 
-  const [lotsDeStock, setLotsDeStock] = useState<LotDeStock[]>([
-    { id: 'lot-101', idProduit: 'pa-1', idLieuStockage: 'ls-1', dateEntree: '2026-06-10', quantiteInitiale: 12000, quantiteDisponible: 8500, origineType: 'Récolte', qualiteEntree: 'Premium', statut: 'Disponible', dateLimiteDegradation: '2026-12-07', coutProductionUnitaire: 210 },
-    { id: 'lot-102', idProduit: 'pa-3', idLieuStockage: 'ls-2', dateEntree: '2026-06-20', quantiteInitiale: 450, quantiteDisponible: 320, origineType: 'ProductionContinue', qualiteEntree: 'Premium', statut: 'Disponible', dateLimiteDegradation: '2026-06-23', coutProductionUnitaire: 420 },
-    { id: 'lot-103', idProduit: 'pa-2', idLieuStockage: 'ls-4', dateEntree: '2026-06-18', quantiteInitiale: 180, quantiteDisponible: 120, origineType: 'Récolte', qualiteEntree: 'Standard', statut: 'Disponible', dateLimiteDegradation: '2026-07-03', coutProductionUnitaire: 3000 },
-    { id: 'lot-104', idProduit: 'pa-4', idLieuStockage: 'ls-3', dateEntree: '2026-06-19', quantiteInitiale: 150, quantiteDisponible: 150, origineType: 'ProductionContinue', qualiteEntree: 'Premium', statut: 'Disponible', dateLimiteDegradation: '2026-07-17', coutProductionUnitaire: 750 },
-    { id: 'lot-105', idProduit: 'pa-2', idLieuStockage: 'ls-3', dateEntree: '2026-06-20', quantiteInitiale: 80, quantiteDisponible: 80, origineType: 'Récolte', qualiteEntree: 'Rejet', statut: 'Bloqué', dateLimiteDegradation: '2026-07-05', coutProductionUnitaire: 2800 }
-  ]);
+  const [lotsDeStock, setLotsDeStock] = useState<LotDeStock[]>(() => {
+    const key = `ka_biolots_${activeTenantId}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    if (activeTenantId === 'client-1') {
+      return [
+        { id: 'lot-101', idProduit: 'pa-1', idLieuStockage: 'ls-1', dateEntree: '2026-06-10', quantiteInitiale: 12000, quantiteDisponible: 8500, origineType: 'Récolte', qualiteEntree: 'Premium', statut: 'Disponible', dateLimiteDegradation: '2026-12-07', coutProductionUnitaire: 210 },
+        { id: 'lot-102', idProduit: 'pa-3', idLieuStockage: 'ls-2', dateEntree: '2026-06-20', quantiteInitiale: 450, quantiteDisponible: 320, origineType: 'ProductionContinue', qualiteEntree: 'Premium', statut: 'Disponible', dateLimiteDegradation: '2026-06-23', coutProductionUnitaire: 420 },
+        { id: 'lot-103', idProduit: 'pa-2', idLieuStockage: 'ls-4', dateEntree: '2026-06-18', quantiteInitiale: 180, quantiteDisponible: 120, origineType: 'Récolte', qualiteEntree: 'Standard', statut: 'Disponible', dateLimiteDegradation: '2026-07-03', coutProductionUnitaire: 3000 }
+      ];
+    }
+    return [];
+  });
 
-  const [mouvementsDeStockGen, setMouvementsDeStockGen] = useState<MouvementDeStockGen[]>([
-    { id: 'mvtg-001', idLotStock: 'lot-101', date: '2026-06-10', typeMouvement: 'entrée', quantite: 12000, quantiteApresMouvement: 12000, operateur: 'Jean-Pierre Ondoa' },
-    { id: 'mvtg-002', idLotStock: 'lot-101', date: '2026-06-15', typeMouvement: 'sortie_vente', quantite: -3500, quantiteApresMouvement: 8500, referenceLiee: 'vte-1001', operateur: 'Paul Atangana' },
-    { id: 'mvtg-003', idLotStock: 'lot-102', date: '2026-06-20', typeMouvement: 'entrée', quantite: 450, quantiteApresMouvement: 450, operateur: 'Marie Ngo' },
-    { id: 'mvtg-004', idLotStock: 'lot-102', date: '2026-06-21', typeMouvement: 'transformation', quantite: -130, quantiteApresMouvement: 320, referenceLiee: 'trf-2001', operateur: 'Marie Ngo' },
-    { id: 'mvtg-005', idLotStock: 'lot-103', date: '2026-06-18', typeMouvement: 'entrée', quantite: 180, quantiteApresMouvement: 180, operateur: 'Jean-Pierre Ondoa' },
-    { id: 'mvtg-006', idLotStock: 'lot-103', date: '2026-06-19', typeMouvement: 'sortie_vente', quantite: -60, quantiteApresMouvement: 120, referenceLiee: 'vte-1002', operateur: 'Paul Atangana' },
-    { id: 'mvtg-007', idLotStock: 'lot-104', date: '2026-06-19', typeMouvement: 'entrée', quantite: 150, quantiteApresMouvement: 150, operateur: 'Roger Kemjou' },
-    { id: 'mvtg-008', idLotStock: 'lot-105', date: '2026-06-20', typeMouvement: 'entrée', quantite: 80, quantiteApresMouvement: 80, operateur: 'Jean-Pierre Ondoa' }
-  ]);
+  const [mouvementsDeStockGen, setMouvementsDeStockGen] = useState<MouvementDeStockGen[]>(() => {
+    const key = `ka_biomvts_${activeTenantId}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    if (activeTenantId === 'client-1') {
+      return [
+        { id: 'mvtg-001', idLotStock: 'lot-101', date: '2026-06-10', typeMouvement: 'entrée', quantite: 12000, quantiteApresMouvement: 12000, operateur: 'Jean-Pierre Ondoa' },
+        { id: 'mvtg-002', idLotStock: 'lot-101', date: '2026-06-15', typeMouvement: 'sortie_vente', quantite: -3500, quantiteApresMouvement: 8500, referenceLiee: 'vte-1001', operateur: 'Paul Atangana' }
+      ];
+    }
+    return [];
+  });
 
-  const [transformationsProduit, setTransformationsProduit] = useState<TransformationProduit[]>([
-    { id: 'trf-2001', date: '2026-06-21', lotsConsommes: [{ idLotStock: 'lot-102', quantiteConsommee: 130 }], idLotProduitCree: 'lot-106', coutTransformation: 15000, tauxRendement: 0.15, operateur: 'Marie Ngo' }
-  ]);
+  const [transformationsProduit, setTransformationsProduit] = useState<TransformationProduit[]>(() => {
+    const key = `ka_biotrans_${activeTenantId}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    if (activeTenantId === 'client-1') {
+      return [
+        { id: 'trf-2001', date: '2026-06-21', lotsConsommes: [{ idLotStock: 'lot-102', quantiteConsommee: 130 }], idLotProduitCree: 'lot-106', coutTransformation: 15000, tauxRendement: 0.15, operateur: 'Marie Ngo' }
+      ];
+    }
+    return [];
+  });
 
-  const [stockAleas, setStockAleas] = useState<StockAleas[]>([
-    { id: 'alea-501', idLotStock: 'lot-101', date: '2026-06-12', type: 'Nuisibles', quantitePerdue: 150, valeurPerdue: 31500, observation: 'Sac endommagé par les rongeurs' }
-  ]);
+  const [stockAleas, setStockAleas] = useState<StockAleas[]>(() => {
+    const key = `ka_bioaleas_${activeTenantId}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    if (activeTenantId === 'client-1') {
+      return [
+        { id: 'alea-501', idLotStock: 'lot-101', date: '2026-06-12', type: 'Nuisibles', quantitePerdue: 150, valeurPerdue: 31500, observation: 'Sac endommagé par les rongeurs' }
+      ];
+    }
+    return [];
+  });
 
-  const [stockVentes, setStockVentes] = useState<StockVente[]>([
-    { id: 'vte-1001', idLotStock: 'lot-101', quantiteVendue: 3500, prixVenteUnitaire: 330, montantTotal: 1155000, canalVente: 'Grossiste Régional', acheteur: 'Ets Fokou', date: '2026-06-15' },
-    { id: 'vte-1002', idLotStock: 'lot-103', quantiteVendue: 60, prixVenteUnitaire: 4500, montantTotal: 270000, canalVente: 'Boutique locale', acheteur: 'Chez Mama Philo', date: '2026-06-19' }
-  ]);
+  const [stockVentes, setStockVentes] = useState<StockVente[]>(() => {
+    const key = `ka_bioventes_${activeTenantId}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    if (activeTenantId === 'client-1') {
+      return [
+        { id: 'vte-1001', idLotStock: 'lot-101', quantiteVendue: 3500, prixVenteUnitaire: 330, montantTotal: 1155000, canalVente: 'Grossiste Régional', acheteur: 'Ets Fokou', date: '2026-06-15' }
+      ];
+    }
+    return [];
+  });
 
   const [inventairesPhysiques, setInventairesPhysiques] = useState<InventairePhysique[]>([]);
+
+  // Reload Bio-Stocks on tenant change
+  useEffect(() => {
+    const keyProd = `ka_bioprod_${activeTenantId}`;
+    const savedProd = localStorage.getItem(keyProd);
+    if (savedProd) {
+      try { setProduitsAgricoles(JSON.parse(savedProd)); } catch (e) {}
+    } else {
+      setProduitsAgricoles(activeTenantId === 'client-1' ? [
+        { id: 'pa-1', nom: 'Maïs Grain Séché', categorie: 'Végétal Brut', uniteReference: 'Kg', dureeConservationMax: 180, prixReferenceMarche: 350 },
+        { id: 'pa-2', nom: 'Banane Plantain Mûre', categorie: 'Végétal Brut', uniteReference: 'Sacs', dureeConservationMax: 15, prixReferenceMarche: 4500 },
+        { id: 'pa-3', nom: 'Lait Cru de Vache', categorie: 'Animal Continu', uniteReference: 'Litres', dureeConservationMax: 3, prixReferenceMarche: 650 },
+        { id: 'pa-4', nom: 'Œufs Frais Calibre L', categorie: 'Animal Continu', uniteReference: 'Douzaines', dureeConservationMax: 28, prixReferenceMarche: 1100 },
+        { id: 'pa-5', nom: 'Cacao Fèves Séchées', categorie: 'Végétal Brut', uniteReference: 'Kg', dureeConservationMax: 360, prixReferenceMarche: 2200 }
+      ] : []);
+    }
+
+    const keyLieux = `ka_biolieux_${activeTenantId}`;
+    const savedLieux = localStorage.getItem(keyLieux);
+    if (savedLieux) {
+      try { setLieuxDeStockage(JSON.parse(savedLieux)); } catch (e) {}
+    } else {
+      setLieuxDeStockage(activeTenantId === 'client-1' ? [
+        { id: 'ls-1', nom: 'Silo Métallique A', type: 'Silo', capaciteMax: 20000, conditions: 'Ventilé à humidité contrôlée stable' },
+        { id: 'ls-2', nom: 'Tank Réfrigéré Tank-3', type: 'Tank à Lait', capaciteMax: 1500, conditions: 'Température constante 4°C, Agitation' },
+        { id: 'ls-3', nom: 'Chambre Froide Positive 1', type: 'Chambre Froide', capaciteMax: 5000, conditions: 'Température 3°C - 5°C, Hygrométrie 85%' },
+        { id: 'ls-4', nom: 'Hangar Central Sacs', type: 'Hangar', capaciteMax: 10000, conditions: 'Sur palettes, aération naturelle' }
+      ] : []);
+    }
+
+    const keyLots = `ka_biolots_${activeTenantId}`;
+    const savedLots = localStorage.getItem(keyLots);
+    if (savedLots) {
+      try { setLotsDeStock(JSON.parse(savedLots)); } catch (e) {}
+    } else {
+      setLotsDeStock(activeTenantId === 'client-1' ? [
+        { id: 'lot-101', idProduit: 'pa-1', idLieuStockage: 'ls-1', dateEntree: '2026-06-10', quantiteInitiale: 12000, quantiteDisponible: 8500, origineType: 'Récolte', qualiteEntree: 'Premium', statut: 'Disponible', dateLimiteDegradation: '2026-12-07', coutProductionUnitaire: 210 },
+        { id: 'lot-102', idProduit: 'pa-3', idLieuStockage: 'ls-2', dateEntree: '2026-06-20', quantiteInitiale: 450, quantiteDisponible: 320, origineType: 'ProductionContinue', qualiteEntree: 'Premium', statut: 'Disponible', dateLimiteDegradation: '2026-06-23', coutProductionUnitaire: 420 },
+        { id: 'lot-103', idProduit: 'pa-2', idLieuStockage: 'ls-4', dateEntree: '2026-06-18', quantiteInitiale: 180, quantiteDisponible: 120, origineType: 'Récolte', qualiteEntree: 'Standard', statut: 'Disponible', dateLimiteDegradation: '2026-07-03', coutProductionUnitaire: 3000 }
+      ] : []);
+    }
+
+    const keyMvts = `ka_biomvts_${activeTenantId}`;
+    const savedMvts = localStorage.getItem(keyMvts);
+    if (savedMvts) {
+      try { setMouvementsDeStockGen(JSON.parse(savedMvts)); } catch (e) {}
+    } else {
+      setMouvementsDeStockGen(activeTenantId === 'client-1' ? [
+        { id: 'mvtg-001', idLotStock: 'lot-101', date: '2026-06-10', typeMouvement: 'entrée', quantite: 12000, quantiteApresMouvement: 12000, operateur: 'Jean-Pierre Ondoa' },
+        { id: 'mvtg-002', idLotStock: 'lot-101', date: '2026-06-15', typeMouvement: 'sortie_vente', quantite: -3500, quantiteApresMouvement: 8500, referenceLiee: 'vte-1001', operateur: 'Paul Atangana' }
+      ] : []);
+    }
+
+    const keyTrans = `ka_biotrans_${activeTenantId}`;
+    const savedTrans = localStorage.getItem(keyTrans);
+    if (savedTrans) {
+      try { setTransformationsProduit(JSON.parse(savedTrans)); } catch (e) {}
+    } else {
+      setTransformationsProduit(activeTenantId === 'client-1' ? [
+        { id: 'trf-2001', date: '2026-06-21', lotsConsommes: [{ idLotStock: 'lot-102', quantiteConsommee: 130 }], idLotProduitCree: 'lot-106', coutTransformation: 15000, tauxRendement: 0.15, operateur: 'Marie Ngo' }
+      ] : []);
+    }
+
+    const keyAleas = `ka_bioaleas_${activeTenantId}`;
+    const savedAleas = localStorage.getItem(keyAleas);
+    if (savedAleas) {
+      try { setStockAleas(JSON.parse(savedAleas)); } catch (e) {}
+    } else {
+      setStockAleas(activeTenantId === 'client-1' ? [
+        { id: 'alea-501', idLotStock: 'lot-101', date: '2026-06-12', type: 'Nuisibles', quantitePerdue: 150, valeurPerdue: 31500, observation: 'Sac endommagé par les rongeurs' }
+      ] : []);
+    }
+
+    const keyVentes = `ka_bioventes_${activeTenantId}`;
+    const savedVentes = localStorage.getItem(keyVentes);
+    if (savedVentes) {
+      try { setStockVentes(JSON.parse(savedVentes)); } catch (e) {}
+    } else {
+      setStockVentes(activeTenantId === 'client-1' ? [
+        { id: 'vte-1001', idLotStock: 'lot-101', quantiteVendue: 3500, prixVenteUnitaire: 330, montantTotal: 1155000, canalVente: 'Grossiste Régional', acheteur: 'Ets Fokou', date: '2026-06-15' }
+      ] : []);
+    }
+  }, [activeTenantId]);
+
+  const currentTenantRef = React.useRef(activeTenantId);
+  useEffect(() => {
+    currentTenantRef.current = activeTenantId;
+  }, [activeTenantId]);
+
+  // Persist Bio-Stocks states to localStorage strictly without cross-tenant pollution
+  useEffect(() => {
+    if (activeTenantId && currentTenantRef.current === activeTenantId) {
+      localStorage.setItem(`ka_bioprod_${activeTenantId}`, JSON.stringify(produitsAgricoles));
+    }
+  }, [produitsAgricoles]);
+
+  useEffect(() => {
+    if (activeTenantId && currentTenantRef.current === activeTenantId) {
+      localStorage.setItem(`ka_biolieux_${activeTenantId}`, JSON.stringify(lieuxDeStockage));
+    }
+  }, [lieuxDeStockage]);
+
+  useEffect(() => {
+    if (activeTenantId && currentTenantRef.current === activeTenantId) {
+      localStorage.setItem(`ka_biolots_${activeTenantId}`, JSON.stringify(lotsDeStock));
+    }
+  }, [lotsDeStock]);
+
+  useEffect(() => {
+    if (activeTenantId && currentTenantRef.current === activeTenantId) {
+      localStorage.setItem(`ka_biomvts_${activeTenantId}`, JSON.stringify(mouvementsDeStockGen));
+    }
+  }, [mouvementsDeStockGen]);
+
+  useEffect(() => {
+    if (activeTenantId && currentTenantRef.current === activeTenantId) {
+      localStorage.setItem(`ka_biotrans_${activeTenantId}`, JSON.stringify(transformationsProduit));
+    }
+  }, [transformationsProduit]);
+
+  useEffect(() => {
+    if (activeTenantId && currentTenantRef.current === activeTenantId) {
+      localStorage.setItem(`ka_bioaleas_${activeTenantId}`, JSON.stringify(stockAleas));
+    }
+  }, [stockAleas]);
+
+  useEffect(() => {
+    if (activeTenantId && currentTenantRef.current === activeTenantId) {
+      localStorage.setItem(`ka_bioventes_${activeTenantId}`, JSON.stringify(stockVentes));
+    }
+  }, [stockVentes]);
 
   // Form active modals for Bio-Stocks
   const [showAddBioProd, setShowAddBioProd] = useState(false);

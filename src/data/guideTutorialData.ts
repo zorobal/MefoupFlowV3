@@ -165,5 +165,19 @@ export const GUIDE_TUTORIAL_ITEMS: Record<string, GuideTutorialItem> = {
       'Consulter les journaux d\'audit technique pour garantir la traçabilité intégrale des actions.'
     ],
     conseilPro: "N'accordez le rôle Super Administrateur qu'aux gestionnaires de confiance et utilisez des profils spécialisés pour vos collaborateurs."
+  },
+  workflow: {
+    id: 'tuto-workflow',
+    tabKey: 'workflow',
+    title: 'Workflow Pas à Pas & Guide Opérationnel',
+    category: 'Cockpit',
+    shortSummary: 'Parcours guidé étape par étape pour utiliser l’outil avec méthode et efficacité chronologique.',
+    description: "Le module Workflow Pas à Pas structure l'utilisation de l'ERP en 8 étapes séquentielles : du découpage foncier et l'affectation agro-pastorale jusqu'aux approvisionnements, travaux de culture/élevage, récolte, stockage et bilan comptable SYSCOHADA.",
+    objectifs: [
+      'Suivre les 8 étapes chronologiques d\'une campagne agro-pastorale réussie.',
+      'Cocher les tâches indispensables et mesurer le taux de progression global.',
+      'Naviguer d\'un clic vers le module exact concerné par chaque étape.'
+    ],
+    conseilPro: "Idéal pour former vos collaborateurs ou pour piloter sereinement une nouvelle campagne en n'oubliant aucun jalon."
   }
 };

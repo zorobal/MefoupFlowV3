@@ -133,6 +133,7 @@ import SaaSAdmin from './components/SaaSAdmin';
 import SettingsModule from './components/SettingsModule';
 import EquipementModule from './components/EquipementModule';
 import BIModule from './components/BIModule';
+import WorkflowModule from './components/WorkflowModule';
 import { MefoupLogo, MefoupRibbon } from './components/MefoupBrand';
 import { GUIDE_TUTORIAL_ITEMS, GuideTutorialItem } from './data/guideTutorialData';
 import { GuideDetailModal } from './components/GuideDetailModal';
@@ -169,7 +170,8 @@ import {
   Eye,
   EyeOff,
   Download,
-  HelpCircle
+  HelpCircle,
+  Compass
 } from 'lucide-react';
 
 export default function App() {
@@ -274,10 +276,10 @@ export default function App() {
       }
     }
     return {
-      Starter: { id: 'Starter', name: 'STARTER', price: 35000, priceUnit: 'mois', maxUsers: 5, maxSurface: 20, modules: ['dashboard', 'agriculture', 'stocks', 'ged'] },
-      Professional: { id: 'Professional', name: 'PROFESSIONAL', price: 95000, priceUnit: 'mois', maxUsers: 25, maxSurface: 100, modules: ['dashboard', 'agriculture', 'elevage', 'stocks', 'commercial', 'compta', 'ged', 'parc-materiel'] },
-      Enterprise: { id: 'Enterprise', name: 'ENTERPRISE', price: 250000, priceUnit: 'mois', maxUsers: 100, maxSurface: 500, modules: ['dashboard', 'agriculture', 'elevage', 'stocks', 'commercial', 'compta', 'rh', 'ged', 'settings', 'parc-materiel', 'bi-reporting'] },
-      Cooperative: { id: 'Cooperative', name: 'COOPÉRATIVE', price: 800000, priceUnit: 'an', maxUsers: 250, maxSurface: 2000, modules: ['dashboard', 'agriculture', 'elevage', 'stocks', 'commercial', 'compta', 'rh', 'ged', 'settings', 'parc-materiel', 'bi-reporting'] }
+      Starter: { id: 'Starter', name: 'STARTER', price: 35000, priceUnit: 'mois', maxUsers: 5, maxSurface: 20, modules: ['dashboard', 'workflow', 'agriculture', 'stocks', 'ged'] },
+      Professional: { id: 'Professional', name: 'PROFESSIONAL', price: 95000, priceUnit: 'mois', maxUsers: 25, maxSurface: 100, modules: ['dashboard', 'workflow', 'agriculture', 'elevage', 'stocks', 'commercial', 'compta', 'ged', 'parc-materiel'] },
+      Enterprise: { id: 'Enterprise', name: 'ENTERPRISE', price: 250000, priceUnit: 'mois', maxUsers: 100, maxSurface: 500, modules: ['dashboard', 'workflow', 'agriculture', 'elevage', 'stocks', 'commercial', 'compta', 'rh', 'ged', 'settings', 'parc-materiel', 'bi-reporting'] },
+      Cooperative: { id: 'Cooperative', name: 'COOPÉRATIVE', price: 800000, priceUnit: 'an', maxUsers: 250, maxSurface: 2000, modules: ['dashboard', 'workflow', 'agriculture', 'elevage', 'stocks', 'commercial', 'compta', 'rh', 'ged', 'settings', 'parc-materiel', 'bi-reporting'] }
     };
   });
 
@@ -304,7 +306,7 @@ export default function App() {
       {
         id: 'role-superadmin',
         name: 'Super Administrateur',
-        modules: ['dashboard', 'agriculture', 'elevage', 'stocks', 'commercial', 'compta', 'rh', 'ged', 'settings', 'parc-materiel', 'bi-reporting'],
+        modules: ['dashboard', 'workflow', 'agriculture', 'elevage', 'stocks', 'commercial', 'compta', 'rh', 'ged', 'settings', 'parc-materiel', 'bi-reporting'],
         canModify: true,
         canDelete: true,
         canImport: true,
@@ -504,7 +506,7 @@ export default function App() {
           if (db.systemSettings && db.systemSettings.roles) {
             const adminRole = db.systemSettings.roles.find((r: any) => r.id === 'role-superadmin');
             if (adminRole) {
-              const expectedModules = ['dashboard', 'agriculture', 'elevage', 'stocks', 'commercial', 'compta', 'rh', 'ged', 'settings', 'parc-materiel', 'bi-reporting'];
+              const expectedModules = ['dashboard', 'workflow', 'agriculture', 'elevage', 'stocks', 'commercial', 'compta', 'rh', 'ged', 'settings', 'parc-materiel', 'bi-reporting'];
               expectedModules.forEach(mod => {
                 if (!adminRole.modules.includes(mod)) {
                   adminRole.modules.push(mod);
@@ -529,7 +531,7 @@ export default function App() {
   });
 
   // Currently active ERP internal tab
-  const [erpTab, setErpTab] = useState<'dashboard' | 'agriculture' | 'elevage' | 'stocks' | 'commercial' | 'compta' | 'rh' | 'ged' | 'settings' | 'parc-materiel' | 'bi-reporting'>(() => {
+  const [erpTab, setErpTab] = useState<'dashboard' | 'workflow' | 'agriculture' | 'elevage' | 'stocks' | 'commercial' | 'compta' | 'rh' | 'ged' | 'settings' | 'parc-materiel' | 'bi-reporting'>(() => {
     return (localStorage.getItem('erpTab') as any) || 'dashboard';
   });
 
@@ -650,7 +652,7 @@ export default function App() {
   React.useEffect(() => {
     const adminRole = systemSettings?.roles?.find(r => r.id === 'role-superadmin');
     if (adminRole) {
-      const expectedModules = ['dashboard', 'agriculture', 'elevage', 'stocks', 'commercial', 'compta', 'rh', 'ged', 'settings', 'parc-materiel', 'bi-reporting'];
+      const expectedModules = ['dashboard', 'workflow', 'agriculture', 'elevage', 'stocks', 'commercial', 'compta', 'rh', 'ged', 'settings', 'parc-materiel', 'bi-reporting'];
       const missing = expectedModules.filter(mod => !adminRole.modules.includes(mod));
       if (missing.length > 0) {
         setSystemSettings(prev => {
@@ -2494,7 +2496,7 @@ export default function App() {
   }
 
   const renderSidebarTab = (
-    tabKey: 'dashboard' | 'bi-reporting' | 'agriculture' | 'elevage' | 'stocks' | 'parc-materiel' | 'commercial' | 'compta' | 'rh' | 'ged' | 'settings',
+    tabKey: 'dashboard' | 'workflow' | 'bi-reporting' | 'agriculture' | 'elevage' | 'stocks' | 'parc-materiel' | 'commercial' | 'compta' | 'rh' | 'ged' | 'settings',
     label: string,
     icon: React.ReactNode
   ) => {
@@ -2731,6 +2733,10 @@ export default function App() {
                 </>
               )}
 
+              {simulatedRole.modules.includes('workflow') && (
+                renderSidebarTab('workflow', 'Workflow Pas à Pas', <Compass className="h-4 w-4 text-[#8CC63F] shrink-0" />)
+              )}
+
               {simulatedRole.modules.includes('bi-reporting') && (
                 renderSidebarTab('bi-reporting', 'BI & Rapports', <LineChart className="h-4 w-4 text-[#8CC63F] shrink-0" />)
               )}
@@ -2890,7 +2896,7 @@ export default function App() {
               onSelectClient={switchActiveTenant}
             />
           ) : (
-            <>
+            <div key={activeTenant?.id} className="w-full">
               {erpTab === 'dashboard' && (
                 <Dashboard
                   exploitations={exploitations}
@@ -2903,6 +2909,27 @@ export default function App() {
                   auditLogs={auditLogs}
                   meteo={currentWeather}
                   mouvementsStock={mouvementsStock}
+                />
+              )}
+
+              {erpTab === 'workflow' && (
+                <WorkflowModule
+                  exploitations={exploitations}
+                  champs={champs}
+                  parcelles={parcelles}
+                  cultures={cultures}
+                  troupeaux={troupeaux}
+                  animaux={animaux}
+                  articles={articles}
+                  mouvementsStock={mouvementsStock}
+                  interventions={interventions}
+                  recoltes={recoltes}
+                  factures={factures}
+                  encaissements={encaissements}
+                  tenantId={activeTenant?.id}
+                  onNavigateTab={(targetTab) => {
+                    setErpTab(targetTab as any);
+                  }}
                 />
               )}
 
@@ -2919,6 +2946,8 @@ export default function App() {
                   incidents={incidents}
                   sitesElevage={sitesElevage}
                   batiments={batiments}
+                  troupeaux={troupeaux}
+                  animaux={animaux}
                   onAddExploitation={(newExp) => setExploitations(prev => [...prev, newExp])}
                   onAddParcelle={handleAddParcelle}
                   onAddCulture={handleAddCulture}
@@ -2953,6 +2982,7 @@ export default function App() {
                   onAddSanitaire={handleAddSanitaire}
                   onAddFeedLog={handleAddFeed}
                   onAddProduction={handleAddProductionElevage}
+                  tenantId={activeTenant?.id}
                 />
               )}
 
@@ -2971,6 +3001,7 @@ export default function App() {
                   onAddMaintenance={handleAddMaintenance}
                   onAddFuelLog={handleAddFuelLog}
                   customLabels={systemSettings.customLabels}
+                  tenantId={activeTenant?.id}
                 />
               )}
 
@@ -2993,6 +3024,7 @@ export default function App() {
                   onAddEncaissement={handleAddEncaissementClient}
                   onConvertDevisToCommande={handleConvertDevisToCommande}
                   customLabels={systemSettings.customLabels}
+                  tenantId={activeTenant?.id}
                 />
               )}
 
@@ -3016,6 +3048,7 @@ export default function App() {
                   onAddPresence={handleAddPresence}
                   onAddBulletin={handleAddBulletin}
                   customLabels={systemSettings.customLabels}
+                  tenantId={activeTenant?.id}
                 />
               )}
 
@@ -3109,9 +3142,10 @@ export default function App() {
                   setAlertesBI={setAlertesBI}
                   requetesPerso={requetesPerso}
                   setRequetesPerso={setRequetesPerso}
+                  tenantId={activeTenant?.id}
                 />
               )}
-            </>
+            </div>
           )}
         </main>
       </div>

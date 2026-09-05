@@ -132,11 +132,14 @@ export default function SettingsModule({
     if (saved) {
       try { return JSON.parse(saved); } catch(e) {}
     }
-    return [
-      { id: 'f-1', typeEntiteCible: 'Employe', nomChamp: 'Taille Uniforme (S/M/L/XL)', codeChamp: 'taille_uniforme', typeDonnee: 'selection', optionsSelection: ['S', 'M', 'L', 'XL'], requis: false, defaultValue: 'L' },
-      { id: 'f-2', typeEntiteCible: 'Parcelle', nomChamp: 'Coefficient Pente Sol (%)', codeChamp: 'pente_sol', typeDonnee: 'number', requis: true, defaultValue: '2' },
-      { id: 'f-3', typeEntiteCible: 'Animal', nomChamp: 'Tempérament comportemental', codeChamp: 'temperament', typeDonnee: 'text', requis: false, defaultValue: 'Calme' }
-    ];
+    if (tenantId === 'client-1') {
+      return [
+        { id: 'f-1', typeEntiteCible: 'Employe', nomChamp: 'Taille Uniforme (S/M/L/XL)', codeChamp: 'taille_uniforme', typeDonnee: 'selection', optionsSelection: ['S', 'M', 'L', 'XL'], requis: false, defaultValue: 'L' },
+        { id: 'f-2', typeEntiteCible: 'Parcelle', nomChamp: 'Coefficient Pente Sol (%)', codeChamp: 'pente_sol', typeDonnee: 'number', requis: true, defaultValue: '2' },
+        { id: 'f-3', typeEntiteCible: 'Animal', nomChamp: 'Tempérament comportemental', codeChamp: 'temperament', typeDonnee: 'text', requis: false, defaultValue: 'Calme' }
+      ];
+    }
+    return [];
   });
 
   const [customFieldValues, setCustomFieldValues] = useState<any[]>(() => {
@@ -154,9 +157,12 @@ export default function SettingsModule({
     if (saved) {
       try { return JSON.parse(saved); } catch(e) {}
     }
-    return [
-      { id: 'ce-1', nomUnique: "Rapport d'aléa météo", codeDefinition: "rapport_meteo_custom", description: "Enregistrement des dégâts liés aux précipitations extraordinaires." }
-    ];
+    if (tenantId === 'client-1') {
+      return [
+        { id: 'ce-1', nomUnique: "Rapport d'aléa météo", codeDefinition: "rapport_meteo_custom", description: "Enregistrement des dégâts liés aux précipitations extraordinaires." }
+      ];
+    }
+    return [];
   });
 
   const [customEntityAttrs, setCustomEntityAttrs] = useState<any[]>(() => {
@@ -165,11 +171,14 @@ export default function SettingsModule({
     if (saved) {
       try { return JSON.parse(saved); } catch(e) {}
     }
-    return [
-      { id: 'ca-1', idDefinitionEntite: 'ce-1', nomAttribut: 'Intensité Pluie (mm)', codeAttribut: 'pluie_mm', typeAttribut: 'number', requis: true },
-      { id: 'ca-2', idDefinitionEntite: 'ce-1', nomAttribut: 'Dégâts de Biomasse (%)', codeAttribut: 'degats_pourcent', typeAttribut: 'number', requis: false },
-      { id: 'ca-3', idDefinitionEntite: 'ce-1', nomAttribut: 'Observations Générales', codeAttribut: 'obs_text', typeAttribut: 'text', requis: false }
-    ];
+    if (tenantId === 'client-1') {
+      return [
+        { id: 'ca-1', idDefinitionEntite: 'ce-1', nomAttribut: 'Intensité Pluie (mm)', codeAttribut: 'pluie_mm', typeAttribut: 'number', requis: true },
+        { id: 'ca-2', idDefinitionEntite: 'ce-1', nomAttribut: 'Dégâts de Biomasse (%)', codeAttribut: 'degats_pourcent', typeAttribut: 'number', requis: false },
+        { id: 'ca-3', idDefinitionEntite: 'ce-1', nomAttribut: 'Observations Générales', codeAttribut: 'obs_text', typeAttribut: 'text', requis: false }
+      ];
+    }
+    return [];
   });
 
   const [customEntityInstances, setCustomEntityInstances] = useState<any[]>(() => {
@@ -178,40 +187,58 @@ export default function SettingsModule({
     if (saved) {
       try { return JSON.parse(saved); } catch(e) {}
     }
-    return [
-      {
-        id: 'cei-1',
-        idDefinitionEntite: 'ce-1',
-        datePlanification: '2026-06-18',
-        valeursAttributes: {
-          'pluie_mm': '124',
-          'degats_pourcent': '12',
-          'obs_text': 'Pluies acides enregistrées au niveau de la cuvette Est de la plantation de bananes.'
-        },
-        auteur: 'Jean-Pierre Ondoa'
-      }
-    ];
+    if (tenantId === 'client-1') {
+      return [
+        {
+          id: 'cei-1',
+          idDefinitionEntite: 'ce-1',
+          datePlanification: '2026-06-18',
+          valeursAttributes: {
+            'pluie_mm': '124',
+            'degats_pourcent': '12',
+            'obs_text': 'Pluies acides enregistrées au niveau de la cuvette Est de la plantation de bananes.'
+          },
+          auteur: 'Jean-Pierre Ondoa'
+        }
+      ];
+    }
+    return [];
   });
 
+  const currentTenantRef = React.useRef(tenantId);
   useEffect(() => {
-    localStorage.setItem(`ka_custom_fields_${tenantId}`, JSON.stringify(customFields));
-  }, [customFields, tenantId]);
+    currentTenantRef.current = tenantId;
+  }, [tenantId]);
 
   useEffect(() => {
-    localStorage.setItem(`ka_custom_field_values_${tenantId}`, JSON.stringify(customFieldValues));
-  }, [customFieldValues, tenantId]);
+    if (tenantId && currentTenantRef.current === tenantId) {
+      localStorage.setItem(`ka_custom_fields_${tenantId}`, JSON.stringify(customFields));
+    }
+  }, [customFields]);
 
   useEffect(() => {
-    localStorage.setItem(`ka_custom_entities_${tenantId}`, JSON.stringify(customEntities));
-  }, [customEntities, tenantId]);
+    if (tenantId && currentTenantRef.current === tenantId) {
+      localStorage.setItem(`ka_custom_field_values_${tenantId}`, JSON.stringify(customFieldValues));
+    }
+  }, [customFieldValues]);
 
   useEffect(() => {
-    localStorage.setItem(`ka_custom_entity_attrs_${tenantId}`, JSON.stringify(customEntityAttrs));
-  }, [customEntityAttrs, tenantId]);
+    if (tenantId && currentTenantRef.current === tenantId) {
+      localStorage.setItem(`ka_custom_entities_${tenantId}`, JSON.stringify(customEntities));
+    }
+  }, [customEntities]);
 
   useEffect(() => {
-    localStorage.setItem(`ka_custom_entity_instances_${tenantId}`, JSON.stringify(customEntityInstances));
-  }, [customEntityInstances, tenantId]);
+    if (tenantId && currentTenantRef.current === tenantId) {
+      localStorage.setItem(`ka_custom_entity_attrs_${tenantId}`, JSON.stringify(customEntityAttrs));
+    }
+  }, [customEntityAttrs]);
+
+  useEffect(() => {
+    if (tenantId && currentTenantRef.current === tenantId) {
+      localStorage.setItem(`ka_custom_entity_instances_${tenantId}`, JSON.stringify(customEntityInstances));
+    }
+  }, [customEntityInstances]);
 
   // UI state for adding custom definitions
   const [newCfTarget, setNewCfTarget] = useState<'Employe' | 'Parcelle' | 'Animal' | 'Article' | 'Fournisseur'>('Employe');

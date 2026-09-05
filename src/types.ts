@@ -104,8 +104,18 @@ export interface Parcelle {
   vocation?: 'Agricole' | 'Pastorale' | 'Mixte' | 'Réserve / Jachère';
   typeExploitation?: 'Culture Végétale' | 'Élevage / Pâturage' | 'Complexe Avicole/Porcin' | 'Agroforesterie' | 'Non Allouée';
   troupeauAffecte?: string; // Nom ou ID du troupeau en pâturage
+  typeAnimalier?: 'Bovins' | 'Caprins / Ovins' | 'Porcins' | 'Volailles' | 'Pâturage Tournant' | 'Autre';
+  animauxOuTroupeauDetails?: string; // Description de l'effectif ou détails
   statutParcelle?: 'En Culture' | 'Pâturage Actif' | 'En Préparation' | 'En Jachère' | 'Repos';
   dateDecoupage?: string;
+  activitesHistoriques?: {
+    id: string;
+    date: string;
+    type: 'Culture' | 'Production Animale' | 'Intervention' | 'Récolte' | 'Aménagement' | 'Sanitaire' | 'Incident' | 'Pâturage';
+    titre: string;
+    description: string;
+    responsable?: string;
+  }[];
 
   // Location / Lease Info (Information de base)
   locationStatus?: 'Propriété' | 'Location';
@@ -211,6 +221,10 @@ export interface Culture {
   dateSemis: string;
   dateRecoltePrevue: string;
   rendementCible: number; // kg/ha or tonnes/ha
+  rendementEstime?: number;
+  rendementReel?: number;
+  coutsEngages?: number;
+  prixVentePrevuKg?: number;
   statut: 'Planifiée' | 'Active' | 'Récoltée' | 'Incidentée' | 'Clôturée';
   budgetPrevisionnel?: number;
   prixVentePrevisionnel?: number;
@@ -240,11 +254,14 @@ export interface Intervention {
 export interface Recolte {
   id: string;
   idCulture: string;
+  idParcelle?: string;
   date: string;
   quantite: number; // kg
+  quantiteKg?: number;
   qualite: 'Premium' | 'Standard' | 'Rejet';
   unite: 'Kg' | 'Tonnes' | 'Sacs' | 'Caisses';
   prixVenteUnitairePoids: number; // FCFA/kg
+  prixUnitaireVenteKg?: number;
   statutSanitaire?: 'Conforme' | '⚠️ Résidus Suspects';
   noteSanitaire?: string;
 }
@@ -288,6 +305,8 @@ export interface Troupeau {
   espece: 'Bovin' | 'Porcin' | 'Ovin' | 'Caprin' | 'Volaille' | 'Pisciculture';
   race: string;
   responsable: string;
+  effectifTotal?: number;
+  localisation?: string;
 }
 
 export interface Animal {
@@ -359,8 +378,10 @@ export interface Article {
   id: string;
   code: string;
   designation: string;
+  nom?: string;
   categorie: 'Semences' | 'Engrais' | 'Produits Phytosanitaires' | 'Produits Vétérinaires' | 'Aliments Animaux' | 'Carburants' | 'Produits Récoltés' | 'Pièces Détachées';
   uniteMesure: string;
+  unite?: string;
   stockMinimum: number;
   prixFournisseurMoyen: number;
 }
@@ -402,6 +423,7 @@ export interface MaintenanceOrder {
   description: string;
   statut: 'En attente' | 'Réalisée';
   coûtFCFA: number;
+  coutReel?: number;
 }
 
 export interface FuelLog {
@@ -409,6 +431,7 @@ export interface FuelLog {
   idEquipement: string;
   date: string;
   quantiteLitre: number;
+  quantiteLitres?: number;
   coûtFCFA: number;
   chauffeur: string;
 }

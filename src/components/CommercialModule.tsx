@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Fournisseur,
   DemandeAchat,
@@ -72,6 +72,7 @@ interface CommercialModuleProps {
   onAddEncaissement: (enc: EncaissementClient) => void;
   onConvertDevisToCommande: (devisId: string) => void;
   customLabels?: any;
+  tenantId?: string;
 }
 
 // Interactive Articles registry schema
@@ -127,11 +128,33 @@ export default function CommercialModule({
   onAddFacture,
   onAddEncaissement,
   onConvertDevisToCommande,
-  customLabels
+  customLabels,
+  tenantId: propTenantId
 }: CommercialModuleProps) {
+  const getEffectiveTenantId = () => {
+    if (propTenantId) return propTenantId;
+    try {
+      const saved = localStorage.getItem('activeTenant');
+      if (saved) {
+        return JSON.parse(saved).id || 'client-1';
+      }
+    } catch (e) {}
+    return 'client-1';
+  };
+  const activeTenantId = getEffectiveTenantId();
+
   // Use state copies for reactive client side additions
   const [factures, setFactures] = useState<FactureClient[]>(initialFactures);
   const [encaissements, setEncaissements] = useState<EncaissementClient[]>(initialEncaissements);
+
+  // Sync props to internal states on tenant or parent updates
+  useEffect(() => {
+    setFactures(initialFactures);
+  }, [initialFactures]);
+
+  useEffect(() => {
+    setEncaissements(initialEncaissements);
+  }, [initialEncaissements]);
 
   // New state components from functional specification
   const [activeTab, setActiveTab] = useState<'devis-ventes' | 'achats' | 'tiers' | 'articles' | 'livraisons' | 'factures' | 'reglements' | 'relances' | 'commissions'>('devis-ventes');
@@ -223,30 +246,139 @@ export default function CommercialModule({
   const [newEncRef, setNewEncRef] = useState('TX-REF-OM-982');
 
   // 1. Initial State for custom features - Tiers Unique Registry (Client/Fournisseur database)
-  const [tiersRegistry, setTiersRegistry] = useState<any[]>([
-    { id: 't-1', code: 'T-C-SOP', raisonSociale: 'SOPROICAM SARL', type: 'Fournisseur', nif: 'M06263544521Z', rccm: 'RC/YAD/2022/B/312', conditionsPaiement: 30, limitAmount: 5000000, currentOutstanding: 0, compAuxAccount: '401102', bankCoords: 'Afriland First Bank CM21', tel: '+237 699 11 22 33', email: 'soproicam@gmail.com', adresse: 'Zone Industrielle, Douala' },
-    { id: 't-2', code: 'T-C-MAI', raisonSociale: 'Maïserie du Cameroun S.A.', type: 'Les deux', nif: 'M08191274534A', rccm: 'RC/DLA/2018/A/102', conditionsPaiement: 15, limitAmount: 15000000, currentOutstanding: 3500000, compAuxAccount: '411102', bankCoords: 'Société Générale CM09', tel: '+237 222 45 45 45', email: 'contact@maiscam.cm', adresse: 'Gare Ferroviaire, Ngaoundéré' },
-    { id: 't-3', code: 'T-C-DIS', raisonSociale: 'Distributeur Mokolo Bio', type: 'Client', nif: 'M09214738592B', rccm: 'RC/YAD/2024/G/88', conditionsPaiement: 0, limitAmount: 1800000, currentOutstanding: 1450000, compAuxAccount: '411105', bankCoords: 'UBA Cameroun CP44', tel: '+237 677 33 44 55', email: 'mokolo.bio@outlook.com', adresse: 'Marché Mokolo, Yaoundé' }
-  ]);
+  const [tiersRegistry, setTiersRegistry] = useState<any[]>(() => {
+    const key = `ka_tiers_${activeTenantId}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    if (activeTenantId === 'client-1') {
+      return [
+        { id: 't-1', code: 'T-C-SOP', raisonSociale: 'SOPROICAM SARL', type: 'Fournisseur', nif: 'M06263544521Z', rccm: 'RC/YAD/2022/B/312', conditionsPaiement: 30, limitAmount: 5000000, currentOutstanding: 0, compAuxAccount: '401102', bankCoords: 'Afriland First Bank CM21', tel: '+237 699 11 22 33', email: 'soproicam@gmail.com', adresse: 'Zone Industrielle, Douala' },
+        { id: 't-2', code: 'T-C-MAI', raisonSociale: 'Maïserie du Cameroun S.A.', type: 'Les deux', nif: 'M08191274534A', rccm: 'RC/DLA/2018/A/102', conditionsPaiement: 15, limitAmount: 15000000, currentOutstanding: 3500000, compAuxAccount: '411102', bankCoords: 'Société Générale CM09', tel: '+237 222 45 45 45', email: 'contact@maiscam.cm', adresse: 'Gare Ferroviaire, Ngaoundéré' }
+      ];
+    }
+    return [];
+  });
 
   // 2. Initial State for Articles Registry
-  const [articlesCatalog, setArticlesCatalog] = useState<ArticleCommercial[]>([
-    { id: 'art-1', designation: 'NPK 20-10-10 Intrants', type: 'Marchandise', prixVente: 0, prixAchat: 18500, compteVente: '7011', compteAchat: '6011', tvaTaux: 18 },
-    { id: 'art-2', designation: 'Maïs Grain Sec en Sac 50Kg', type: 'Marchandise', prixVente: 15000, prixAchat: 0, compteVente: '7011', compteAchat: '6011', tvaTaux: 18 },
-    { id: 'art-3', designation: 'Lait Entier Pasteurisé (Litre)', type: 'Marchandise', prixVente: 800, prixAchat: 0, compteVente: '7012', compteAchat: '6015', tvaTaux: 18 },
-    { id: 'art-4', designation: 'Diagnostic vétérinaire clinique', type: 'Service', prixVente: 0, prixAchat: 25000, compteVente: '7088', compteAchat: '6028', tvaTaux: 0 }
-  ]);
+  const [articlesCatalog, setArticlesCatalog] = useState<ArticleCommercial[]>(() => {
+    const key = `ka_comm_articles_${activeTenantId}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    if (activeTenantId === 'client-1') {
+      return [
+        { id: 'art-1', designation: 'NPK 20-10-10 Intrants', type: 'Marchandise', prixVente: 0, prixAchat: 18500, compteVente: '7011', compteAchat: '6011', tvaTaux: 18 },
+        { id: 'art-2', designation: 'Maïs Grain Sec en Sac 50Kg', type: 'Marchandise', prixVente: 15000, prixAchat: 0, compteVente: '7011', compteAchat: '6011', tvaTaux: 18 }
+      ];
+    }
+    return [];
+  });
 
   // 3. Initial State for Delivery/Receipt Notes
-  const [deliveryNotes, setDeliveryNotes] = useState<BonDeLivraison[]>([
-    { id: 'bl-1', type: 'Réception', commandeCode: 'BC-2026-401', date: '2026-06-02', tiersNom: 'SOPROICAM SARL', items: [{ articleNom: 'Engrais NPK', quantiteCommandee: 20, quantiteLivree: 20 }], statut: 'Complet' },
-    { id: 'bl-2', type: 'Livraison', commandeCode: 'CMD-MIL-902', date: '2026-06-11', tiersNom: 'Maïserie du Cameroun S.A.', items: [{ articleNom: 'Maïs Grain Sec 50Kg', quantiteCommandee: 100, quantiteLivree: 80 }], statut: 'Partiel' }
-  ]);
+  const [deliveryNotes, setDeliveryNotes] = useState<BonDeLivraison[]>(() => {
+    const key = `ka_deliv_${activeTenantId}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    if (activeTenantId === 'client-1') {
+      return [
+        { id: 'bl-1', type: 'Réception', commandeCode: 'BC-2026-401', date: '2026-06-02', tiersNom: 'SOPROICAM SARL', items: [{ articleNom: 'Engrais NPK', quantiteCommandee: 20, quantiteLivree: 20 }], statut: 'Complet' }
+      ];
+    }
+    return [];
+  });
 
   // 4. Initial State for Avoirs
-  const [avoirs, setAvoirs] = useState<FactureAvoir[]>([
-    { id: 'av-1', originalFactureCode: 'FAC-AUTO-203', code: 'AV-2026-001', tiersNom: 'Distributeur Mokolo Bio', date: '2026-06-14', totalHT: 120000, totalTTC: 120000, motif: 'Aisément déduite suite à 8 sacs de maïs avariés constatés à la livraison' }
-  ]);
+  const [avoirs, setAvoirs] = useState<FactureAvoir[]>(() => {
+    const key = `ka_avoirs_${activeTenantId}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    if (activeTenantId === 'client-1') {
+      return [
+        { id: 'av-1', originalFactureCode: 'FAC-AUTO-203', code: 'AV-2026-001', tiersNom: 'Distributeur Mokolo Bio', date: '2026-06-14', totalHT: 120000, totalTTC: 120000, motif: 'Aisément déduite suite à 8 sacs de maïs avariés constatés à la livraison' }
+      ];
+    }
+    return [];
+  });
+
+  // Reload commercial datasets on tenant change
+  useEffect(() => {
+    const keyTiers = `ka_tiers_${activeTenantId}`;
+    const savedTiers = localStorage.getItem(keyTiers);
+    if (savedTiers) {
+      try { setTiersRegistry(JSON.parse(savedTiers)); } catch (e) {}
+    } else {
+      setTiersRegistry(activeTenantId === 'client-1' ? [
+        { id: 't-1', code: 'T-C-SOP', raisonSociale: 'SOPROICAM SARL', type: 'Fournisseur', nif: 'M06263544521Z', rccm: 'RC/YAD/2022/B/312', conditionsPaiement: 30, limitAmount: 5000000, currentOutstanding: 0, compAuxAccount: '401102', bankCoords: 'Afriland First Bank CM21', tel: '+237 699 11 22 33', email: 'soproicam@gmail.com', adresse: 'Zone Industrielle, Douala' }
+      ] : []);
+    }
+
+    const keyArt = `ka_comm_articles_${activeTenantId}`;
+    const savedArt = localStorage.getItem(keyArt);
+    if (savedArt) {
+      try { setArticlesCatalog(JSON.parse(savedArt)); } catch (e) {}
+    } else {
+      setArticlesCatalog(activeTenantId === 'client-1' ? [
+        { id: 'art-1', designation: 'NPK 20-10-10 Intrants', type: 'Marchandise', prixVente: 0, prixAchat: 18500, compteVente: '7011', compteAchat: '6011', tvaTaux: 18 }
+      ] : []);
+    }
+
+    const keyDeliv = `ka_deliv_${activeTenantId}`;
+    const savedDeliv = localStorage.getItem(keyDeliv);
+    if (savedDeliv) {
+      try { setDeliveryNotes(JSON.parse(savedDeliv)); } catch (e) {}
+    } else {
+      setDeliveryNotes(activeTenantId === 'client-1' ? [
+        { id: 'bl-1', type: 'Réception', commandeCode: 'BC-2026-401', date: '2026-06-02', tiersNom: 'SOPROICAM SARL', items: [{ articleNom: 'Engrais NPK', quantiteCommandee: 20, quantiteLivree: 20 }], statut: 'Complet' }
+      ] : []);
+    }
+
+    const keyAvoirs = `ka_avoirs_${activeTenantId}`;
+    const savedAvoirs = localStorage.getItem(keyAvoirs);
+    if (savedAvoirs) {
+      try { setAvoirs(JSON.parse(savedAvoirs)); } catch (e) {}
+    } else {
+      setAvoirs(activeTenantId === 'client-1' ? [
+        { id: 'av-1', originalFactureCode: 'FAC-AUTO-203', code: 'AV-2026-001', tiersNom: 'Distributeur Mokolo Bio', date: '2026-06-14', totalHT: 120000, totalTTC: 120000, motif: 'Aisément déduite suite à 8 sacs de maïs avariés constatés à la livraison' }
+      ] : []);
+    }
+  }, [activeTenantId]);
+
+  const currentTenantRef = React.useRef(activeTenantId);
+  useEffect(() => {
+    currentTenantRef.current = activeTenantId;
+  }, [activeTenantId]);
+
+  // Persist commercial datasets to localStorage safely
+  useEffect(() => {
+    if (activeTenantId && currentTenantRef.current === activeTenantId) {
+      localStorage.setItem(`ka_tiers_${activeTenantId}`, JSON.stringify(tiersRegistry));
+    }
+  }, [tiersRegistry]);
+
+  useEffect(() => {
+    if (activeTenantId && currentTenantRef.current === activeTenantId) {
+      localStorage.setItem(`ka_comm_articles_${activeTenantId}`, JSON.stringify(articlesCatalog));
+    }
+  }, [articlesCatalog]);
+
+  useEffect(() => {
+    if (activeTenantId && currentTenantRef.current === activeTenantId) {
+      localStorage.setItem(`ka_deliv_${activeTenantId}`, JSON.stringify(deliveryNotes));
+    }
+  }, [deliveryNotes]);
+
+  useEffect(() => {
+    if (activeTenantId && currentTenantRef.current === activeTenantId) {
+      localStorage.setItem(`ka_avoirs_${activeTenantId}`, JSON.stringify(avoirs));
+    }
+  }, [avoirs]);
 
   // Helpers
   const getClientName = (cliId: string) => {

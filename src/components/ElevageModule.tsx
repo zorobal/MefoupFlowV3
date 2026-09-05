@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   SiteElevage,
   Batiment,
@@ -130,6 +130,7 @@ interface ElevageModuleProps {
   onAddSanitaire: (san: BaseSanitaire) => void;
   onAddFeedLog: (feed: FeedLog) => void;
   onAddProduction: (prod: BaseProd) => void;
+  tenantId?: string;
 }
 
 export default function ElevageModule({
@@ -145,90 +146,95 @@ export default function ElevageModule({
   onAddReproduction,
   onAddSanitaire,
   onAddFeedLog,
-  onAddProduction
+  onAddProduction,
+  tenantId: propTenantId
 }: ElevageModuleProps) {
+
+  const getEffectiveTenantId = () => {
+    if (propTenantId) return propTenantId;
+    try {
+      const saved = localStorage.getItem('activeTenant');
+      if (saved) {
+        return JSON.parse(saved).id || 'client-1';
+      }
+    } catch (e) {}
+    return 'client-1';
+  };
+  const activeTenantId = getEffectiveTenantId();
 
   // Current active sub-sections
   const [activeTab, setActiveTab] = useState<'cycles' | 'lots' | 'animaux' | 'sanitaire' | 'aleas' | 'prod_continue' | 'compta'>('cycles');
 
-  // --- COMPREHENSIVE LOCAL MOCK STATES (TO COMPLY WITH SPEC) ---
-  const [cycles, setCycles] = useState<CyclePilotage[]>([
-    {
-      id: 'cyc-1',
-      code: 'CYCLE-2026-VOLAILLE-A',
-      type: 'Bandes',
-      idLot: 'lot-poulets-1',
-      nom: 'Bande Poulets de Chair #4 - Obala',
-      dateDebut: '2026-05-10',
-      dateFin: '2026-07-15',
-      statut: 'En cours',
-      budgetAchatAliment: 1200000,
-      budgetSoinsVeto: 150000,
-      budgetMainDoeuvre: 300000,
-      budgetInfrastructures: 100000,
-      prixVenteCibleKilo: 1600,
-      notesComptables: 'Campagne d\'hivernage précoce, surveillance humidité.'
-    },
-    {
-      id: 'cyc-2',
-      code: 'CYCLE-2026-DIARY-BOVIN',
-      type: 'Calendaire',
-      idTroupeau: 'trp-bov-1',
-      nom: 'Suivi Laitier Vaches Goudali Q2',
-      dateDebut: '2026-04-01',
-      dateFin: '2026-06-30',
-      statut: 'En cours',
-      budgetAchatAliment: 2500000,
-      budgetSoinsVeto: 450000,
-      budgetMainDoeuvre: 800000,
-      budgetInfrastructures: 350000,
-      prixVenteCibleKilo: 450, // per Liter
-      notesComptables: 'Bout de lactation pour le lot Gou-B.'
-    },
-    {
-      id: 'cyc-3',
-      code: 'CYCLE-2025-PORCIN-B',
-      type: 'Bandes',
-      idLot: 'lot-porcs-1',
-      nom: 'Bande Sevrage Engraissement Porcs',
-      dateDebut: '2025-09-10',
-      dateFin: '2026-03-15',
-      statut: 'Clôturé',
-      budgetAchatAliment: 3500000,
-      budgetSoinsVeto: 600000,
-      budgetMainDoeuvre: 600000,
-      budgetInfrastructures: 450000,
-      prixVenteCibleKilo: 1900,
-      notesComptables: 'Excellente croissance brute, clôturé au SYSCOHADA.'
+  // --- TENANT-ISOLATED LOCAL STATES ---
+  const [cycles, setCycles] = useState<CyclePilotage[]>(() => {
+    const key = `ka_cycles_${activeTenantId}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
     }
-  ]);
+    if (activeTenantId === 'client-1') {
+      return [
+        {
+          id: 'cyc-1',
+          code: 'CYCLE-2026-VOLAILLE-A',
+          type: 'Bandes',
+          idLot: 'lot-poulets-1',
+          nom: 'Bande Poulets de Chair #4 - Obala',
+          dateDebut: '2026-05-10',
+          dateFin: '2026-07-15',
+          statut: 'En cours',
+          budgetAchatAliment: 1200000,
+          budgetSoinsVeto: 150000,
+          budgetMainDoeuvre: 300000,
+          budgetInfrastructures: 100000,
+          prixVenteCibleKilo: 1600,
+          notesComptables: 'Campagne d\'hivernage précoce, surveillance humidité.'
+        },
+        {
+          id: 'cyc-2',
+          code: 'CYCLE-2026-DIARY-BOVIN',
+          type: 'Calendaire',
+          idTroupeau: 'trp-bov-1',
+          nom: 'Suivi Laitier Vaches Goudali Q2',
+          dateDebut: '2026-04-01',
+          dateFin: '2026-06-30',
+          statut: 'En cours',
+          budgetAchatAliment: 2500000,
+          budgetSoinsVeto: 450000,
+          budgetMainDoeuvre: 800000,
+          budgetInfrastructures: 350000,
+          prixVenteCibleKilo: 450,
+          notesComptables: 'Bout de lactation pour le lot Gou-B.'
+        }
+      ];
+    }
+    return [];
+  });
 
-  const [lots, setLots] = useState<ItemLot[]>([
-    {
-      id: 'lot-poulets-1',
-      nom: 'Bande d\'engraissement Cobb 500',
-      espece: 'Volaille',
-      race: 'Cobb 500',
-      idBatiment: batiments.find(b => b.type === 'Poulailler')?.id || 'bat-1',
-      effectifInitial: 2500,
-      effectifActuel: 2410,
-      dateConstitution: '2026-05-10',
-      coutAlimentationCumule: 840000,
-      statut: 'Actif'
-    },
-    {
-      id: 'lot-porcs-1',
-      nom: 'Bande Porcs Large White',
-      espece: 'Porcin',
-      race: 'Large White',
-      idBatiment: batiments.find(b => b.type === 'Porcherie')?.id || 'bat-2',
-      effectifInitial: 120,
-      effectifActuel: 114,
-      dateConstitution: '2025-09-10',
-      coutAlimentationCumule: 3850000,
-      statut: 'Fermé'
+  const [lots, setLots] = useState<ItemLot[]>(() => {
+    const key = `ka_lots_${activeTenantId}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
     }
-  ]);
+    if (activeTenantId === 'client-1') {
+      return [
+        {
+          id: 'lot-poulets-1',
+          nom: 'Bande d\'engraissement Cobb 500',
+          espece: 'Volaille',
+          race: 'Cobb 500',
+          idBatiment: batiments.find(b => b.type === 'Poulailler')?.id || 'bat-1',
+          effectifInitial: 2500,
+          effectifActuel: 2410,
+          dateConstitution: '2026-05-10',
+          coutAlimentationCumule: 840000,
+          statut: 'Actif'
+        }
+      ];
+    }
+    return [];
+  });
 
   // Extended local representation of animals with pedigree, exits and weights history
   const [animaux, setAnimaux] = useState<Animal[]>(() => {
@@ -244,64 +250,217 @@ export default function ElevageModule({
     }));
   });
 
-  const [aleas, setAleas] = useState<AléaInfection[]>([
-    {
-      id: 'al-1',
-      date: '2026-05-15',
-      idCycle: 'cyc-1',
-      idLot: 'lot-poulets-1',
-      type: 'Mortalité',
-      quantitePerdue: 34, // 34 heads
-      valeurEstimeeFCFA: 68000, // 34 * 2000 FCFA
-      description: 'Choc thermique d\'un ventilateur défectueux dans le bâtiment Poulailler A.',
-      veterinaireAppele: false
-    },
-    {
-      id: 'al-2',
-      date: '2026-06-03',
-      idCycle: 'cyc-2',
-      idAnimal: 'ani-1', // cow dead/illness
-      type: 'Maladie',
-      quantitePerdue: 0, // illness, no immediate death
-      valeurEstimeeFCFA: 35000, // production loss
-      description: 'Suspicion dermatose nodulaire contagieuse sur vache Gou-15. Quarantaine stricte.',
-      veterinaireAppele: true
+  const [aleas, setAleas] = useState<AléaInfection[]>(() => {
+    const key = `ka_aleas_${activeTenantId}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
     }
-  ]);
+    if (activeTenantId === 'client-1') {
+      return [
+        {
+          id: 'al-1',
+          date: '2026-05-15',
+          idCycle: 'cyc-1',
+          idLot: 'lot-poulets-1',
+          type: 'Mortalité',
+          quantitePerdue: 34,
+          valeurEstimeeFCFA: 68000,
+          description: 'Choc thermique d\'un ventilateur défectueux dans le bâtiment Poulailler A.',
+          veterinaireAppele: false
+        }
+      ];
+    }
+    return [];
+  });
 
-  const [ventesProductions, setVentesProductions] = useState<VenteProduction[]>([
-    {
-      id: 'vnt-1',
-      date: '2026-06-12',
-      type: 'Lait',
-      quantite: 450,
-      prixUnitaire: 500,
-      acheteur: 'Centrale Laitière du Littoral',
-      idCycle: 'cyc-2'
-    },
-    {
-      id: 'vnt-2',
-      date: '2026-06-15',
-      type: 'Œufs',
-      quantite: 15, // 15 plateaux
-      prixUnitaire: 2200,
-      acheteur: 'Supérette de la Cité',
-      idCycle: 'cyc-1'
+  const [ventesProductions, setVentesProductions] = useState<VenteProduction[]>(() => {
+    const key = `ka_ventes_prod_${activeTenantId}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
     }
-  ]);
+    if (activeTenantId === 'client-1') {
+      return [
+        {
+          id: 'vnt-1',
+          date: '2026-06-12',
+          type: 'Lait',
+          quantite: 450,
+          prixUnitaire: 500,
+          acheteur: 'Centrale Laitière du Littoral',
+          idCycle: 'cyc-2'
+        }
+      ];
+    }
+    return [];
+  });
 
   // Track sanitary treatment wait cycles (critical safety spec block #5)
-  const [sanitaryWaitPeriods, setSanitaryWaitPeriods] = useState<Array<{ id: string; targetName: string; medicament: string; dateSoin: string; waitDays: number; debutDate: string; active: boolean }>>([
-    {
-      id: 'wait-1',
-      targetName: 'Vache Goudali Dorée (COW-001)',
-      medicament: 'Albenmax 10% (Albendazole)',
-      dateSoin: '2026-06-15',
-      waitDays: 14,
-      debutDate: '2026-06-15',
-      active: true
+  const [sanitaryWaitPeriods, setSanitaryWaitPeriods] = useState<Array<{ id: string; targetName: string; medicament: string; dateSoin: string; waitDays: number; debutDate: string; active: boolean }>>(() => {
+    const key = `ka_sanitary_wait_${activeTenantId}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
     }
-  ]);
+    if (activeTenantId === 'client-1') {
+      return [
+        {
+          id: 'wait-1',
+          targetName: 'Vache Goudali Dorée (COW-001)',
+          medicament: 'Albenmax 10% (Albendazole)',
+          dateSoin: '2026-06-15',
+          waitDays: 14,
+          debutDate: '2026-06-15',
+          active: true
+        }
+      ];
+    }
+    return [];
+  });
+
+  // --- RE-SYNCHRONIZE ON TENANT CHANGE OR PROPS UPDATE ---
+  useEffect(() => {
+    setAnimaux(initialAnimauxProps.map((a, idx) => ({
+      ...a,
+      pereId: idx % 3 === 0 ? 'ani-pater' : undefined,
+      mereId: idx % 3 === 1 ? 'ani-mater' : undefined,
+      poidsHistorique: [
+        { date: '2026-04-10', poids: a.poidsActuel - 50 },
+        { date: '2026-05-20', poids: a.poidsActuel - 20 },
+        { date: '2026-06-19', poids: a.poidsActuel }
+      ]
+    })));
+  }, [initialAnimauxProps]);
+
+  useEffect(() => {
+    // Reload tenant specific data
+    const keyCycles = `ka_cycles_${activeTenantId}`;
+    const savedCycles = localStorage.getItem(keyCycles);
+    if (savedCycles) {
+      try { setCycles(JSON.parse(savedCycles)); } catch (e) {}
+    } else {
+      setCycles(activeTenantId === 'client-1' ? [
+        {
+          id: 'cyc-1',
+          code: 'CYCLE-2026-VOLAILLE-A',
+          type: 'Bandes',
+          idLot: 'lot-poulets-1',
+          nom: 'Bande Poulets de Chair #4 - Obala',
+          dateDebut: '2026-05-10',
+          dateFin: '2026-07-15',
+          statut: 'En cours',
+          budgetAchatAliment: 1200000,
+          budgetSoinsVeto: 150000,
+          budgetMainDoeuvre: 300000,
+          budgetInfrastructures: 100000,
+          prixVenteCibleKilo: 1600,
+          notesComptables: 'Campagne d\'hivernage précoce, surveillance humidité.'
+        }
+      ] : []);
+    }
+
+    const keyLots = `ka_lots_${activeTenantId}`;
+    const savedLots = localStorage.getItem(keyLots);
+    if (savedLots) {
+      try { setLots(JSON.parse(savedLots)); } catch (e) {}
+    } else {
+      setLots(activeTenantId === 'client-1' ? [
+        {
+          id: 'lot-poulets-1',
+          nom: 'Bande d\'engraissement Cobb 500',
+          espece: 'Volaille',
+          race: 'Cobb 500',
+          idBatiment: batiments.find(b => b.type === 'Poulailler')?.id || 'bat-1',
+          effectifInitial: 2500,
+          effectifActuel: 2410,
+          dateConstitution: '2026-05-10',
+          coutAlimentationCumule: 840000,
+          statut: 'Actif'
+        }
+      ] : []);
+    }
+
+    const keyAleas = `ka_aleas_${activeTenantId}`;
+    const savedAleas = localStorage.getItem(keyAleas);
+    if (savedAleas) {
+      try { setAleas(JSON.parse(savedAleas)); } catch (e) {}
+    } else {
+      setAleas(activeTenantId === 'client-1' ? [
+        {
+          id: 'al-1',
+          date: '2026-05-15',
+          idCycle: 'cyc-1',
+          idLot: 'lot-poulets-1',
+          type: 'Mortalité',
+          quantitePerdue: 34,
+          valeurEstimeeFCFA: 68000,
+          description: 'Choc thermique d\'un ventilateur défectueux dans le bâtiment Poulailler A.',
+          veterinaireAppele: false
+        }
+      ] : []);
+    }
+
+    const keyVentes = `ka_ventes_prod_${activeTenantId}`;
+    const savedVentes = localStorage.getItem(keyVentes);
+    if (savedVentes) {
+      try { setVentesProductions(JSON.parse(savedVentes)); } catch (e) {}
+    } else {
+      setVentesProductions(activeTenantId === 'client-1' ? [
+        {
+          id: 'vnt-1',
+          date: '2026-06-12',
+          type: 'Lait',
+          quantite: 450,
+          prixUnitaire: 500,
+          acheteur: 'Centrale Laitière du Littoral',
+          idCycle: 'cyc-2'
+        }
+      ] : []);
+    }
+  }, [activeTenantId]);
+
+  const currentTenantRef = React.useRef(activeTenantId);
+  useEffect(() => {
+    currentTenantRef.current = activeTenantId;
+  }, [activeTenantId]);
+
+  // Persist updates to localStorage strictly scoped to active tenant
+  useEffect(() => {
+    if (activeTenantId && currentTenantRef.current === activeTenantId) {
+      localStorage.setItem(`ka_cycles_${activeTenantId}`, JSON.stringify(cycles));
+    }
+  }, [cycles]);
+
+  useEffect(() => {
+    if (activeTenantId && currentTenantRef.current === activeTenantId) {
+      localStorage.setItem(`ka_lots_${activeTenantId}`, JSON.stringify(lots));
+    }
+  }, [lots]);
+
+  useEffect(() => {
+    if (activeTenantId && currentTenantRef.current === activeTenantId) {
+      localStorage.setItem(`ka_aleas_${activeTenantId}`, JSON.stringify(aleas));
+    }
+  }, [aleas]);
+
+  useEffect(() => {
+    if (activeTenantId && currentTenantRef.current === activeTenantId) {
+      localStorage.setItem(`ka_ventes_prod_${activeTenantId}`, JSON.stringify(ventesProductions));
+    }
+  }, [ventesProductions]);
+
+  useEffect(() => {
+    if (activeTenantId && currentTenantRef.current === activeTenantId) {
+      localStorage.setItem(`ka_sanitary_wait_${activeTenantId}`, JSON.stringify(sanitaryWaitPeriods));
+    }
+  }, [sanitaryWaitPeriods]);
+
+  // Sync props to local states for sub-modules
+  useEffect(() => { setReproductions(initialReprosProps); }, [initialReprosProps]);
+  useEffect(() => { setSanitaires(initialSanitairesProps); }, [initialSanitairesProps]);
+  useEffect(() => { setFeedLogs(initialFeedLogsProps); }, [initialFeedLogsProps]);
+  useEffect(() => { setProductions(initialProdsProps); }, [initialProdsProps]);
 
   // --- STATE FOR COMPLEX REPRODUCTIVE EVENTS GLUE ---
   const [reproductions, setReproductions] = useState<BaseRepro[]>(initialReprosProps);
@@ -315,7 +474,7 @@ export default function ElevageModule({
     let totalInitial = 0;
     lots.forEach(l => totalInitial += l.effectifInitial);
     let totalMorts = aleas.filter(a => a.type === 'Mortalité').reduce((sum, a) => sum + a.quantitePerdue, 0);
-    return totalInitial > 0 ? ((totalMorts / totalInitial) * 100) : 1.4;
+    return totalInitial > 0 ? ((totalMorts / totalInitial) * 100) : 0;
   }, [lots, aleas]);
 
   // GMQ Calculation for cattle: (poids_sortie - poids_entrée) / jours OR rate of growth
@@ -332,21 +491,22 @@ export default function ElevageModule({
         count++;
       }
     });
-    return count > 0 ? Math.round(sumGMQ / count) : 850; // default 850g/day
+    return count > 0 ? Math.round(sumGMQ / count) : 0;
   }, [animaux]);
 
   // Feed Conversion Index (Indice de consommation - food consumed / weight gain)
   const feedConversionRatio = useMemo(() => {
-    // Total food divided by estimated weight produced
-    let totalFood = feedLogs.reduce((sum, f) => sum + f.quantiteKg, 0) || 5400;
-    let totalWeightGain = 1200; // estimated kg produced
+    let totalFood = feedLogs.reduce((sum, f) => sum + f.quantiteKg, 0);
+    if (totalFood === 0) return '0.00';
+    let totalWeightGain = Math.max(1, animaux.reduce((sum, a) => sum + (a.poidsActuel || 0), 0));
     return (totalFood / totalWeightGain).toFixed(2);
-  }, [feedLogs]);
+  }, [feedLogs, animaux]);
 
   // Productivité par femelle reproductrice (babies weaned / mother / year)
   const productivitéMères = useMemo(() => {
     const successCount = reproductions.filter(r => r.statut === 'Mise bas réussie').reduce((sum, r) => sum + (r.survivants || 0), 0);
-    const uniqueFemales = new Set(reproductions.map(r => r.idAnimalFemelle)).size || 1;
+    const uniqueFemales = new Set(reproductions.map(r => r.idAnimalFemelle)).size;
+    if (uniqueFemales === 0) return '0.0';
     return (successCount / uniqueFemales).toFixed(1);
   }, [reproductions]);
 

@@ -15,7 +15,9 @@ import {
   IncidentAgricole,
   SiteElevage,
   Batiment,
-  Champ
+  Champ,
+  Troupeau,
+  Animal
 } from '../types';
 import {
   Sprout,
@@ -57,6 +59,8 @@ interface AgricultureModuleProps {
   incidents: IncidentAgricole[];
   sitesElevage?: SiteElevage[];
   batiments?: Batiment[];
+  troupeaux?: Troupeau[];
+  animaux?: Animal[];
   onAddExploitation: (exp: Exploitation) => void;
   onAddParcelle: (par: Parcelle) => void;
   onAddCulture: (cult: Culture) => void;
@@ -87,6 +91,8 @@ export default function AgricultureModule({
   incidents,
   sitesElevage = [],
   batiments = [],
+  troupeaux = [],
+  animaux = [],
   onAddExploitation,
   onAddParcelle,
   onAddCulture,
@@ -190,7 +196,8 @@ export default function AgricultureModule({
   const [newIncSurfaceImpactee, setNewIncSurfaceImpactee] = useState(1); // 1 Ha
   const [newIncCultureId, setNewIncCultureId] = useState('');
 
-  const [newInterType, setNewInterType] = useState<'Labour' | 'Semis' | 'Fertilisation' | 'Irrigation' | 'Traitement phytosanitaire' | 'Récolte'>('Labour');
+  const [newInterParcelle, setNewInterParcelle] = useState(parcelles[0]?.id || '');
+  const [newInterType, setNewInterType] = useState<string>('Labour');
   const [newInterCulture, setNewInterCulture] = useState(cultures[0]?.id || '');
   const [newInterIntrant, setNewInterIntrant] = useState('');
   const [newInterIntrantQ, setNewInterIntrantQ] = useState(0);
@@ -211,6 +218,57 @@ export default function AgricultureModule({
 
   // Active Crop Logbook (Cahier Cultural Expert Option)
   const [selectedCahierCultId, setSelectedCahierCultId] = useState<string | null>(null);
+
+  // Dual-use Terrain & Parcelle complete management states
+  const [selectedParcelForDetail, setSelectedParcelForDetail] = useState<Parcelle | null>(null);
+  const [selectedParcelForAffectation, setSelectedParcelForAffectation] = useState<Parcelle | null>(null);
+  const [champPlotsFilter, setChampPlotsFilter] = useState<Record<string, 'all' | 'agri' | 'pastoral' | 'mixte' | 'disponible'>>({});
+  const [affectVocation, setAffectVocation] = useState<'Agricole' | 'Pastorale' | 'Mixte' | 'Réserve / Jachère'>('Pastorale');
+  const [affectTypeExploitation, setAffectTypeExploitation] = useState<string>('Culture Végétale');
+  const [affectStatut, setAffectStatut] = useState<string>('En Culture');
+  const [affectTroupeau, setAffectTroupeau] = useState('');
+  const [affectCultureNom, setAffectCultureNom] = useState('Maïs Grain');
+  const [affectCultureVariete, setAffectCultureVariete] = useState('Pioneer Hybride');
+
+  const handleSaveParcelAffectation = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedParcelForAffectation) return;
+    const updated: Parcelle = {
+      ...selectedParcelForAffectation,
+      vocation: affectVocation,
+      troupeauAffecte: (affectVocation === 'Pastorale' || affectVocation === 'Mixte') ? (affectTroupeau || 'Troupeau en pâturage') : undefined,
+      typeExploitation: affectVocation === 'Pastorale' ? 'Élevage / Pâturage' : (affectVocation === 'Agricole' ? 'Culture Végétale' : (affectVocation === 'Mixte' ? 'Agroforesterie' : 'Non Allouée')),
+      statutParcelle: affectVocation === 'Agricole' ? 'En Culture' : (affectVocation === 'Pastorale' ? 'Pâturage Actif' : (affectVocation === 'Mixte' ? 'Pâturage Actif' : 'En Jachère'))
+    };
+    if (onUpdateParcelle) {
+      onUpdateParcelle(updated);
+    }
+    // If allocating to crop and no active crop exists, create one
+    if ((affectVocation === 'Agricole' || affectVocation === 'Mixte') && affectCultureNom) {
+      const activeCropExists = cultures.some(c => c.idParcelle === selectedParcelForAffectation.id && c.statut === 'Active');
+      if (!activeCropExists) {
+        const newCult: Culture = {
+          id: 'cult-' + Math.floor(Math.random() * 10000),
+          idParcelle: selectedParcelForAffectation.id,
+          idCampagne: campagnes[0]?.id || 'camp-1',
+          responsable: 'Chef de Culture',
+          rendementCible: 4500,
+          nom: affectCultureNom,
+          variete: affectCultureVariete,
+          dateSemis: new Date().toISOString().split('T')[0],
+          dateRecoltePrevue: new Date(Date.now() + 90 * 86400000).toISOString().split('T')[0],
+          statut: 'Active',
+          surfaceCultivee: selectedParcelForAffectation.surface,
+          rendementEstime: 4000,
+          rendementReel: 0,
+          coutsEngages: 250000,
+          prixVentePrevuKg: 350
+        };
+        onAddCulture(newCult);
+      }
+    }
+    setSelectedParcelForAffectation(null);
+  };
 
   const isCultureUnderDar = (cultureId: string) => {
     const activeInterventionsOfThisCulture = interventions.filter(i => i.idCulture === cultureId);
@@ -475,10 +533,10 @@ export default function AgricultureModule({
 
     const newInter: Intervention = {
       id: 'int-' + Math.floor(Math.random() * 10000),
-      idParcelle: cult?.idParcelle || parcelles[0]?.id || '',
-      idCulture: newInterCulture,
+      idParcelle: newInterParcelle || cult?.idParcelle || parcelles[0]?.id || '',
+      idCulture: newInterCulture || undefined,
       date: dateStr,
-      type: newInterType,
+      type: newInterType as any,
       substanceIntrant: newInterIntrant || undefined,
       quantiteIntrant: newInterIntrantQ || undefined,
       uniteIntrant: newInterIntrantU || undefined,
@@ -1317,17 +1375,43 @@ export default function AgricultureModule({
                     const pastoralPlots = linkedPlots.filter(p => p.vocation === 'Pastorale');
                     const pastoralSurf = pastoralPlots.reduce((sum, p) => sum + (p.surface || 0), 0);
 
-                    const agriPct = Math.min(100, Math.round((agriSurf / champTotal) * 100));
-                    const pastPct = Math.min(100 - agriPct, Math.round((pastoralSurf / champTotal) * 100));
-                    const freePct = Math.max(0, 100 - agriPct - pastPct);
+                    const mixtePlots = linkedPlots.filter(p => p.vocation === 'Mixte');
+                    const mixteSurf = mixtePlots.reduce((sum, p) => sum + (p.surface || 0), 0);
+
+                    // Used plots vs remaining/idle plots
+                    const usedPlots = linkedPlots.filter(p => {
+                      const hasActiveCult = cultures.some(c => c.idParcelle === p.id && c.statut === 'Active');
+                      const isPastoral = p.vocation === 'Pastorale' || (p.troupeauAffecte && p.troupeauAffecte.trim().length > 0);
+                      const isMixte = p.vocation === 'Mixte';
+                      return hasActiveCult || isPastoral || isMixte;
+                    });
+                    const usedSurf = usedPlots.reduce((sum, p) => sum + (p.surface || 0), 0);
+
+                    const remainingPlots = linkedPlots.filter(p => !usedPlots.some(up => up.id === p.id));
+                    const remainingPlotsSurf = remainingPlots.reduce((sum, p) => sum + (p.surface || 0), 0);
+
+                    const agriPct = Math.round((agriSurf / champTotal) * 100);
+                    const pastPct = Math.round((pastoralSurf / champTotal) * 100);
+                    const mixtePct = Math.round((mixteSurf / champTotal) * 100);
+                    const jacherePct = Math.round((remainingPlotsSurf / champTotal) * 100);
+                    const freePct = Math.max(0, 100 - agriPct - pastPct - mixtePct - jacherePct);
+
+                    const currentFilter = champPlotsFilter[champ.id] || 'all';
+                    const displayedPlots = linkedPlots.filter(p => {
+                      if (currentFilter === 'agri') return (p.vocation || 'Agricole') === 'Agricole';
+                      if (currentFilter === 'pastoral') return p.vocation === 'Pastorale';
+                      if (currentFilter === 'mixte') return p.vocation === 'Mixte';
+                      if (currentFilter === 'disponible') return remainingPlots.some(rp => rp.id === p.id);
+                      return true;
+                    });
 
                     return (
-                      <div key={champ.id} className="bg-white border rounded-2xl p-5 shadow-3xs flex flex-col justify-between hover:shadow-md transition">
+                      <div key={champ.id} className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs flex flex-col justify-between hover:shadow-md transition">
                         <div className="space-y-4">
                           {/* En-tête du Terrain */}
                           <div className="flex justify-between items-start gap-2">
                             <div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center gap-1.5">
                                 <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 font-mono text-[11px] font-bold rounded border border-emerald-200">
                                   {champ.code}
                                 </span>
@@ -1345,7 +1429,7 @@ export default function AgricultureModule({
                                   📜 {champ.statutJuridique || 'Titre Foncier'}
                                 </span>
                               </div>
-                              <h4 className="font-extrabold text-slate-900 text-base mt-2">
+                              <h4 className="font-black text-slate-900 text-base mt-2">
                                 {champ.nom}
                               </h4>
                               {champ.numeroTitre && (
@@ -1398,7 +1482,7 @@ export default function AgricultureModule({
                               </span>
                             </div>
                             <div className="col-span-2 pt-1 border-t border-slate-200">
-                              <span className="text-[9px] font-bold text-slate-400 uppercase block">Localité & Accès</span>
+                              <span className="text-[9px] font-bold text-slate-400 uppercase block">Localité & Voie d'accès</span>
                               <span className="font-medium text-slate-700">{champ.localite}</span>
                             </div>
                             <div className="col-span-2 pt-1 border-t border-slate-200">
@@ -1407,127 +1491,316 @@ export default function AgricultureModule({
                             </div>
                           </div>
 
-                          {/* Jauge d'Occupation et de Découpage Foncier */}
-                          <div className="space-y-1.5 bg-white p-3 rounded-xl border border-slate-100">
-                            <div className="flex justify-between text-[11px]">
-                              <span className="font-bold text-slate-700">Allocation du Domaine :</span>
-                              <span className="text-slate-500 font-mono font-medium">
-                                <span className="font-bold text-emerald-700">{totalPlotsSurf.toFixed(1)} ha découpés</span> / {champTotal.toFixed(1)} ha
+                          {/* Tableau de Bord Foncier : Parcelles Utilisées, Ce qu'on fait dessus, et Reste */}
+                          <div className="space-y-2 bg-emerald-50/30 p-3 rounded-xl border border-emerald-100">
+                            <div className="flex flex-wrap justify-between items-center text-xs gap-1">
+                              <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                                <Layers className="h-3.5 w-3.5 text-emerald-700" />
+                                Gestion & Double Vocation (Agricole & Production Animale)
+                              </span>
+                              <span className="text-slate-600 font-mono text-[11px]">
+                                <strong className="text-emerald-800">{totalPlotsSurf.toFixed(1)} ha</strong> morcelés / {champTotal.toFixed(1)} ha
                               </span>
                             </div>
 
-                            {/* Barre tricolore d'allocation */}
+                            {/* Jauge d'occupation multi-couleurs */}
                             <div className="h-3.5 w-full bg-slate-100 rounded-full overflow-hidden flex border border-slate-200">
                               {agriSurf > 0 && (
                                 <div
                                   style={{ width: `${agriPct}%` }}
                                   className="bg-emerald-600 h-full transition-all flex items-center justify-center text-[8px] text-white font-bold"
-                                  title={`Agricole: ${agriSurf.toFixed(1)} ha (${agriPct}%)`}
+                                  title={`Culture Végétale: ${agriSurf.toFixed(1)} ha (${agriPct}%)`}
                                 >
-                                  {agriPct >= 10 ? `${agriSurf} ha` : ''}
+                                  {agriPct >= 12 ? `${agriSurf.toFixed(1)}ha 🌱` : ''}
                                 </div>
                               )}
                               {pastoralSurf > 0 && (
                                 <div
                                   style={{ width: `${pastPct}%` }}
                                   className="bg-amber-500 h-full transition-all flex items-center justify-center text-[8px] text-white font-bold"
-                                  title={`Élevage / Pastoral: ${pastoralSurf.toFixed(1)} ha (${pastPct}%)`}
+                                  title={`Production Animale / Élevage: ${pastoralSurf.toFixed(1)} ha (${pastPct}%)`}
                                 >
-                                  {pastPct >= 10 ? `${pastoralSurf} ha` : ''}
+                                  {pastPct >= 12 ? `${pastoralSurf.toFixed(1)}ha 🐄` : ''}
+                                </div>
+                              )}
+                              {mixteSurf > 0 && (
+                                <div
+                                  style={{ width: `${mixtePct}%` }}
+                                  className="bg-teal-600 h-full transition-all flex items-center justify-center text-[8px] text-white font-bold"
+                                  title={`Mixte Agro-Pastoral: ${mixteSurf.toFixed(1)} ha (${mixtePct}%)`}
+                                >
+                                  {mixtePct >= 12 ? `${mixteSurf.toFixed(1)}ha 🌾` : ''}
+                                </div>
+                              )}
+                              {remainingPlotsSurf > 0 && (
+                                <div
+                                  style={{ width: `${jacherePct}%` }}
+                                  className="bg-indigo-300 h-full transition-all flex items-center justify-center text-[8px] text-indigo-900 font-bold"
+                                  title={`Jachères disponibles: ${remainingPlotsSurf.toFixed(1)} ha (${jacherePct}%)`}
+                                >
+                                  {jacherePct >= 12 ? `Jachère` : ''}
                                 </div>
                               )}
                               {freeSurf > 0 && (
                                 <div
                                   style={{ width: `${freePct}%` }}
                                   className="bg-slate-200 h-full transition-all flex items-center justify-center text-[8px] text-slate-600 font-bold"
-                                  title={`Réserve disponible: ${freeSurf.toFixed(1)} ha (${freePct}%)`}
+                                  title={`Réserve vierge disponible: ${freeSurf.toFixed(1)} ha (${freePct}%)`}
                                 >
-                                  {freePct >= 15 ? `${freeSurf.toFixed(1)} ha libre` : ''}
+                                  {freePct >= 15 ? `${freeSurf.toFixed(1)}ha libre` : ''}
                                 </div>
                               )}
                             </div>
 
-                            <div className="flex justify-between text-[10px] text-slate-500 pt-0.5">
-                              <span className="text-emerald-700 font-semibold">🌱 Agricole : {agriSurf.toFixed(1)} ha ({agriPlots.length} parc.)</span>
-                              <span className="text-amber-700 font-semibold">🐄 Pastorale : {pastoralSurf.toFixed(1)} ha ({pastoralPlots.length} parc.)</span>
-                              <span className="text-slate-600 font-semibold">🛑 Libre : {freeSurf.toFixed(1)} ha</span>
+                            {/* Synthèse parcelles utilisées vs parcelles restantes */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1 text-[10px]">
+                              <div className="bg-white p-1.5 rounded-lg border border-slate-200">
+                                <span className="text-emerald-700 font-bold block">🌱 Culture Végétale</span>
+                                <span className="font-extrabold text-slate-900 text-xs">{agriPlots.length} parc.</span> ({agriSurf.toFixed(1)} ha)
+                              </div>
+                              <div className="bg-white p-1.5 rounded-lg border border-amber-200">
+                                <span className="text-amber-700 font-bold block">🐄 Production Animale</span>
+                                <span className="font-extrabold text-slate-900 text-xs">{pastoralPlots.length} parc.</span> ({pastoralSurf.toFixed(1)} ha)
+                              </div>
+                              <div className="bg-white p-1.5 rounded-lg border border-teal-200">
+                                <span className="text-teal-700 font-bold block">🌾 Agro-Pastoral</span>
+                                <span className="font-extrabold text-slate-900 text-xs">{mixtePlots.length} parc.</span> ({mixteSurf.toFixed(1)} ha)
+                              </div>
+                              <div className="bg-white p-1.5 rounded-lg border border-slate-200">
+                                <span className="text-slate-600 font-bold block">🛑 Terres Restantes</span>
+                                <span className="font-extrabold text-emerald-800 text-xs">{(freeSurf + remainingPlotsSurf).toFixed(1)} ha</span>
+                                <span className="text-[9px] text-slate-400 block font-normal">({freeSurf.toFixed(1)}h réserve + {remainingPlots.length} jach.)</span>
+                              </div>
                             </div>
                           </div>
 
-                          {/* Parcelles Découpées dans ce Terrain */}
+                          {/* Parcelles Découpées : Filtres & "Ce qu'on a fait dessus" */}
                           <div className="space-y-2">
-                            <div className="flex justify-between items-center text-xs">
-                              <span className="font-extrabold text-slate-800">
-                                Parcelles Découpées ({linkedPlots.length})
+                            <div className="flex flex-wrap justify-between items-center gap-1">
+                              <span className="font-extrabold text-slate-800 text-xs">
+                                Parcelles du Domaine ({linkedPlots.length})
                               </span>
-                              <button
-                                onClick={() => {
-                                  setNewParChampId(champ.id);
-                                  setNewParVocation('Agricole');
-                                  setNewParSurf(Math.min(10, freeSurf > 0 ? freeSurf : 5));
-                                  setShowAddParcelle(true);
-                                }}
-                                className="text-[11px] text-emerald-700 font-bold hover:underline flex items-center gap-1"
-                              >
-                                <PlusCircle className="h-3.5 w-3.5" />
-                                + Découper une parcelle
-                              </button>
+                              {/* Filtre par vocation */}
+                              <div className="flex flex-wrap gap-1 text-[10px]">
+                                <button
+                                  onClick={() => setChampPlotsFilter(prev => ({ ...prev, [champ.id]: 'all' }))}
+                                  className={`px-2 py-0.5 rounded-md font-bold transition ${
+                                    currentFilter === 'all'
+                                      ? 'bg-slate-800 text-white'
+                                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                  }`}
+                                >
+                                  Toutes ({linkedPlots.length})
+                                </button>
+                                <button
+                                  onClick={() => setChampPlotsFilter(prev => ({ ...prev, [champ.id]: 'agri' }))}
+                                  className={`px-2 py-0.5 rounded-md font-bold transition ${
+                                    currentFilter === 'agri'
+                                      ? 'bg-emerald-700 text-white'
+                                      : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                                  }`}
+                                >
+                                  🌱 ({agriPlots.length})
+                                </button>
+                                <button
+                                  onClick={() => setChampPlotsFilter(prev => ({ ...prev, [champ.id]: 'pastoral' }))}
+                                  className={`px-2 py-0.5 rounded-md font-bold transition ${
+                                    currentFilter === 'pastoral'
+                                      ? 'bg-amber-600 text-white'
+                                      : 'bg-amber-50 text-amber-900 hover:bg-amber-100'
+                                  }`}
+                                >
+                                  🐄 ({pastoralPlots.length})
+                                </button>
+                                <button
+                                  onClick={() => setChampPlotsFilter(prev => ({ ...prev, [champ.id]: 'mixte' }))}
+                                  className={`px-2 py-0.5 rounded-md font-bold transition ${
+                                    currentFilter === 'mixte'
+                                      ? 'bg-teal-700 text-white'
+                                      : 'bg-teal-50 text-teal-900 hover:bg-teal-100'
+                                  }`}
+                                >
+                                  🌾 ({mixtePlots.length})
+                                </button>
+                                <button
+                                  onClick={() => setChampPlotsFilter(prev => ({ ...prev, [champ.id]: 'disponible' }))}
+                                  className={`px-2 py-0.5 rounded-md font-bold transition ${
+                                    currentFilter === 'disponible'
+                                      ? 'bg-indigo-700 text-white'
+                                      : 'bg-indigo-50 text-indigo-900 hover:bg-indigo-100'
+                                  }`}
+                                >
+                                  🛑 Libres ({remainingPlots.length})
+                                </button>
+                              </div>
                             </div>
 
                             {linkedPlots.length === 0 ? (
-                              <div className="text-xs text-slate-400 italic bg-slate-50 p-3 rounded-xl text-center border border-dashed">
-                                Aucune parcelle n'est encore découpée dans ce domaine.
+                              <div className="text-xs text-slate-400 italic bg-slate-50 p-4 rounded-xl text-center border border-dashed">
+                                Aucune parcelle n'est encore découpée dans ce domaine foncier.
                                 <br />
-                                Cliquez sur "+ Découper une parcelle" pour morceler vos premiers hectares.
+                                Utilisez les boutons ci-dessous pour découper pour la <strong>Culture Végétale</strong> ou la <strong>Production Animale</strong>.
+                              </div>
+                            ) : displayedPlots.length === 0 ? (
+                              <div className="text-xs text-slate-400 italic bg-slate-50 p-3 rounded-xl text-center border">
+                                Aucune parcelle ne correspond au filtre sélectionné pour ce terrain.
                               </div>
                             ) : (
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
-                                {linkedPlots.map((p) => {
+                              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                                {displayedPlots.map((p) => {
                                   const activeCult = cultures.find(c => c.idParcelle === p.id && c.statut === 'Active');
                                   const isPastoral = p.vocation === 'Pastorale';
+                                  const isMixte = p.vocation === 'Mixte';
+                                  
+                                  // Ce qu'on a fait dessus : Interventions & Récoltes
+                                  const pInterventions = interventions.filter(i => i.idParcelle === p.id || (activeCult && i.idCulture === activeCult.id));
+                                  const pRecoltes = recoltes.filter(r => r.idParcelle === p.id || (activeCult && r.idCulture === activeCult.id));
+                                  const totalTravauxCount = pInterventions.length + pRecoltes.length;
 
                                   return (
                                     <div
                                       key={p.id}
-                                      className={`p-2.5 rounded-xl border text-xs transition ${
+                                      className={`p-3 rounded-xl border text-xs transition ${
                                         isPastoral
                                           ? 'bg-amber-50/40 border-amber-200 hover:border-amber-300'
+                                          : isMixte
+                                          ? 'bg-teal-50/40 border-teal-200 hover:border-teal-300'
                                           : 'bg-emerald-50/40 border-emerald-200 hover:border-emerald-300'
                                       }`}
                                     >
+                                      {/* Ligne 1 : Nom, Code, Surface & Vocation */}
                                       <div className="flex justify-between items-start">
                                         <div>
-                                          <span className="font-mono text-[10px] font-bold text-slate-500 block">
-                                            {p.code}
-                                          </span>
-                                          <span className="font-bold text-slate-800 text-xs">
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="font-mono text-[10px] font-bold text-slate-500">
+                                              {p.code}
+                                            </span>
+                                            <span className={`px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase ${
+                                              isPastoral
+                                                ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                                : isMixte
+                                                ? 'bg-teal-100 text-teal-900 border border-teal-300'
+                                                : 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                                            }`}>
+                                              {isPastoral ? '🐄 Production Animale' : isMixte ? '🌾 Agro-pastoral' : '🌱 Culture Végétale'}
+                                            </span>
+                                          </div>
+                                          <h5 className="font-bold text-slate-900 text-xs mt-0.5">
                                             {p.nom}
+                                          </h5>
+                                        </div>
+                                        <div className="text-right">
+                                          <span className="font-extrabold text-slate-900 bg-white px-2 py-0.5 rounded border text-[11px] shadow-3xs">
+                                            {p.surface} ha
+                                          </span>
+                                          <span className="text-[10px] text-slate-400 block mt-0.5 font-mono">
+                                            pH {p.ph} • {p.typeSol || 'Terre franche'}
                                           </span>
                                         </div>
-                                        <span className="font-extrabold text-slate-900 bg-white px-1.5 py-0.5 rounded border text-[11px]">
-                                          {p.surface} ha
-                                        </span>
                                       </div>
 
-                                      <div className="mt-2 flex items-center justify-between pt-1.5 border-t border-slate-200/60">
-                                        <div className="flex items-center gap-1">
+                                      {/* Ligne 2 : Affectation actuelle (Culture ou Troupeau) */}
+                                      <div className="mt-2 p-2 bg-white rounded-lg border border-slate-200/80 flex flex-wrap justify-between items-center gap-1">
+                                        <div className="text-[11px]">
                                           {isPastoral ? (
-                                            <span className="px-1.5 py-0.5 bg-amber-100 text-amber-900 text-[9px] font-bold rounded">
-                                              🐄 {p.troupeauAffecte || 'Pâturage Élevage'}
-                                            </span>
+                                            <div className="flex items-center gap-1.5">
+                                              <span className="text-amber-700 font-bold">🐄 Troupeau / Pâture :</span>
+                                              <span className="font-extrabold text-slate-900">
+                                                {p.troupeauAffecte || 'Pâturage tournant & Enclos'}
+                                              </span>
+                                            </div>
+                                          ) : isMixte ? (
+                                            <div className="flex items-center gap-1.5">
+                                              <span className="text-teal-700 font-bold">🌾 Double usage :</span>
+                                              <span className="font-bold text-slate-800">
+                                                {activeCult ? `${activeCult.nom} + ` : ''}{p.troupeauAffecte || 'Élevage associé'}
+                                              </span>
+                                            </div>
                                           ) : activeCult ? (
-                                            <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-900 text-[9px] font-bold rounded">
-                                              🌱 {activeCult.nom}
-                                            </span>
+                                            <div className="flex items-center gap-1.5">
+                                              <span className="text-emerald-700 font-bold">🌱 Culture en cours :</span>
+                                              <span className="font-extrabold text-slate-900">
+                                                {activeCult.nom} ({activeCult.variete})
+                                              </span>
+                                              <span className="text-[10px] text-slate-400">
+                                                semé le {activeCult.dateSemis}
+                                              </span>
+                                            </div>
                                           ) : (
-                                            <span className="text-[9px] text-slate-400 italic">
-                                              💤 Jachère végétale
+                                            <span className="text-slate-400 italic">
+                                              💤 Parcelle en jachère (repos du sol)
                                             </span>
                                           )}
                                         </div>
-                                        <span className="text-[10px] text-slate-500 font-mono">
-                                          pH {p.ph}
-                                        </span>
+
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            onClick={() => {
+                                              setSelectedParcelForAffectation(p);
+                                              setAffectVocation(p.vocation || 'Pastorale');
+                                              setAffectTroupeau(p.troupeauAffecte || '');
+                                            }}
+                                            className="px-2 py-0.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 rounded text-[10px] font-bold transition flex items-center gap-1"
+                                            title="Changer l'affectation de cette parcelle vers la culture ou l'élevage"
+                                          >
+                                            🔄 Réaffecter
+                                          </button>
+                                          <button
+                                            onClick={() => setSelectedParcelForDetail(p)}
+                                            className="px-2 py-0.5 bg-slate-800 hover:bg-slate-900 text-white rounded text-[10px] font-bold transition flex items-center gap-1"
+                                          >
+                                            📋 Fiche & Travaux
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      {/* Ligne 3 : "Ce qu'on a fait dessus" (Dernières interventions / travaux réalisés) */}
+                                      <div className="mt-2 pt-1.5 border-t border-slate-200/60">
+                                        <div className="flex justify-between items-center text-[10px] mb-1">
+                                          <span className="font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                                            🔨 Ce qu'on a fait dessus ({totalTravauxCount} opérations)
+                                          </span>
+                                          <button
+                                            onClick={() => {
+                                              setNewInterParcelle(p.id);
+                                              if (activeCult) {
+                                                setNewInterCulture(activeCult.id);
+                                              }
+                                              setShowAddIntervention(true);
+                                            }}
+                                            className="text-emerald-700 font-extrabold hover:underline"
+                                          >
+                                            + Ajouter un travail
+                                          </button>
+                                        </div>
+
+                                        {totalTravauxCount === 0 ? (
+                                          <p className="text-[10px] text-slate-400 italic">
+                                            Aucun travail ou intervention enregistré pour le moment sur cette parcelle.
+                                          </p>
+                                        ) : (
+                                          <div className="space-y-1">
+                                            {pInterventions.slice(0, 2).map((op) => (
+                                              <div key={op.id} className="flex justify-between items-center text-[10px] bg-white/80 px-2 py-0.5 rounded border border-slate-200/50">
+                                                <span className="font-semibold text-slate-800">
+                                                  🚜 {op.type} {op.substanceIntrant ? `(${op.substanceIntrant})` : ''}
+                                                </span>
+                                                <div className="flex items-center gap-2 text-slate-500">
+                                                  <span>{op.date}</span>
+                                                  <span className="font-bold text-slate-700">{op.mainDOeuvreCoût.toLocaleString()} F</span>
+                                                </div>
+                                              </div>
+                                            ))}
+                                            {pRecoltes.slice(0, 1).map((rec) => (
+                                              <div key={rec.id} className="flex justify-between items-center text-[10px] bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                                <span className="font-bold text-amber-900">
+                                                  🌾 Récolte : {rec.quantiteKg.toLocaleString()} Kg ({rec.qualite})
+                                                </span>
+                                                <span className="text-amber-700 font-medium">{rec.date}</span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
                                   );
@@ -1537,28 +1810,70 @@ export default function AgricultureModule({
                           </div>
                         </div>
 
-                        {/* Pied de carte : Découpage direct */}
-                        <div className="pt-4 mt-3 border-t flex justify-between items-center">
-                          <span className="text-[11px] text-slate-500">
-                            Réserve disponible : <strong className="text-emerald-700 font-bold">{freeSurf.toFixed(1)} ha</strong>
+                        {/* Pied de carte : Découpage pour Culture Végétale OU Production Animale */}
+                        <div className="pt-3.5 mt-3 border-t flex flex-col sm:flex-row justify-between items-center gap-2">
+                          <span className="text-[11px] text-slate-600">
+                            Réserve disponible : <strong className="text-emerald-700 font-bold">{freeSurf.toFixed(1)} ha libres</strong>
                           </span>
-                          <button
-                            onClick={() => {
-                              setNewParChampId(champ.id);
-                              setNewParVocation(freeSurf > 0 ? 'Agricole' : 'Pastorale');
-                              setNewParSurf(Math.min(10, freeSurf > 0 ? freeSurf : 5));
-                              setShowAddParcelle(true);
-                            }}
-                            disabled={freeSurf <= 0}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                              freeSurf > 0
-                                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
-                                : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                            }`}
-                          >
-                            <PlusCircle className="h-3.5 w-3.5" />
-                            Découper {freeSurf > 0 ? `(${freeSurf.toFixed(1)} ha disp.)` : 'Complet'}
-                          </button>
+
+                          <div className="flex flex-wrap gap-1.5">
+                            <button
+                              onClick={() => {
+                                setNewParChampId(champ.id);
+                                setNewParVocation('Agricole');
+                                setNewParTypeExploitation('Culture Végétale');
+                                setNewParSurf(Math.min(10, freeSurf > 0 ? freeSurf : 5));
+                                setShowAddParcelle(true);
+                              }}
+                              disabled={freeSurf <= 0}
+                              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 ${
+                                freeSurf > 0
+                                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+                                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                              }`}
+                              title="Découper une nouvelle parcelle dédiée aux cultures végétales"
+                            >
+                              🌱 Découper Culture
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                setNewParChampId(champ.id);
+                                setNewParVocation('Pastorale');
+                                setNewParTypeExploitation('Élevage / Pâturage');
+                                setNewParSurf(Math.min(10, freeSurf > 0 ? freeSurf : 5));
+                                setShowAddParcelle(true);
+                              }}
+                              disabled={freeSurf <= 0}
+                              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 ${
+                                freeSurf > 0
+                                  ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-xs'
+                                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                              }`}
+                              title="Découper une nouvelle parcelle dédiée à la production animale / élevage"
+                            >
+                              🐄 Découper Élevage
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                setNewParChampId(champ.id);
+                                setNewParVocation('Mixte');
+                                setNewParTypeExploitation('Agroforesterie');
+                                setNewParSurf(Math.min(10, freeSurf > 0 ? freeSurf : 5));
+                                setShowAddParcelle(true);
+                              }}
+                              disabled={freeSurf <= 0}
+                              className={`px-2 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 ${
+                                freeSurf > 0
+                                  ? 'bg-teal-600 hover:bg-teal-700 text-white shadow-xs'
+                                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                              }`}
+                              title="Découper une parcelle mixte agro-pastorale"
+                            >
+                              🌾 Mixte
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -2915,16 +3230,38 @@ export default function AgricultureModule({
                   </button>
                 </div>
 
-                {newParVocation === 'Pastorale' ? (
-                  <div className="pt-2 border-t border-slate-200">
-                    <label className="block font-bold text-slate-700 mb-1">Troupeau ou Espèce Pastorale affectée</label>
-                    <input 
-                      type="text" 
-                      value={newParTroupeauAffecte} 
-                      onChange={(e) => setNewParTroupeauAffecte(e.target.value)} 
-                      placeholder="Ex: Troupeau Bovins Goudali N°2 (45 têtes)" 
-                      className="w-full border border-slate-200 rounded-lg p-2 bg-white" 
-                    />
+                {newParVocation === 'Pastorale' || newParVocation === 'Mixte' ? (
+                  <div className="pt-2 border-t border-slate-200 space-y-2">
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Troupeau / Bêtes affectées à la parcelle ({newParVocation === 'Pastorale' ? 'Production Animale' : 'Agro-pastoral'})
+                    </label>
+                    {troupeaux && troupeaux.length > 0 && (
+                      <div>
+                        <span className="text-[10px] text-slate-500 block mb-1">Sélectionner parmi les troupeaux enregistrés :</span>
+                        <select
+                          value={newParTroupeauAffecte}
+                          onChange={(e) => setNewParTroupeauAffecte(e.target.value)}
+                          className="w-full border border-slate-200 rounded-lg p-2 bg-white text-xs"
+                        >
+                          <option value="">-- Choisir un troupeau existant --</option>
+                          {troupeaux.map(tr => (
+                            <option key={tr.id} value={`${tr.nom} (${tr.espece} - ${tr.effectifTotal} têtes)`}>
+                              {tr.nom} • {tr.espece} ({tr.effectifTotal} têtes)
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    <div>
+                      <span className="text-[10px] text-slate-500 block mb-1">Ou saisir une désignation personnalisée :</span>
+                      <input 
+                        type="text" 
+                        value={newParTroupeauAffecte} 
+                        onChange={(e) => setNewParTroupeauAffecte(e.target.value)} 
+                        placeholder="Ex: Troupeau Bovins Goudali N°2 (45 têtes) / Pâturage 1" 
+                        className="w-full border border-slate-200 rounded-lg p-2 bg-white text-xs" 
+                      />
+                    </div>
                   </div>
                 ) : (
                   <div className="pt-2 border-t border-slate-200">
@@ -2934,7 +3271,7 @@ export default function AgricultureModule({
                       value={newParTypeExploitation} 
                       onChange={(e) => setNewParTypeExploitation(e.target.value)} 
                       placeholder="Ex: Maraîchage intensif / Grande culture de céréales" 
-                      className="w-full border border-slate-200 rounded-lg p-2 bg-white" 
+                      className="w-full border border-slate-200 rounded-lg p-2 bg-white text-xs" 
                     />
                   </div>
                 )}
@@ -3725,6 +4062,444 @@ export default function AgricultureModule({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: RÉAFFECTATION PARCELLE (CULTURE VÉGÉTALE ↔ PRODUCTION ANIMALE / PÂTURAGE) */}
+      {selectedParcelForAffectation && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-lg w-full border shadow-xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="bg-slate-800 text-white p-4 flex justify-between items-center">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider block">
+                  Double Vocation & Réorientation Foncier
+                </span>
+                <h3 className="font-extrabold text-sm">
+                  Affectation de la Parcelle : {selectedParcelForAffectation.nom} ({selectedParcelForAffectation.code})
+                </h3>
+              </div>
+              <button 
+                onClick={() => setSelectedParcelForAffectation(null)}
+                className="text-white hover:text-slate-200 text-sm font-bold p-1 rounded-full hover:bg-slate-700 transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs overflow-y-auto">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex justify-between items-center">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Surface de la Parcelle</span>
+                  <span className="font-black text-slate-900 text-sm">{selectedParcelForAffectation.surface} ha</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Vocation Actuelle</span>
+                  <span className="font-bold text-slate-800">
+                    {selectedParcelForAffectation.vocation || 'Agricole'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Sol & Eau</span>
+                  <span className="font-medium text-slate-600">
+                    pH {selectedParcelForAffectation.ph} • {selectedParcelForAffectation.sourceEau || 'Forage'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Sélection Vocation */}
+              <div className="space-y-2">
+                <label className="block font-extrabold text-slate-800">
+                  Choisir la Nouvelle Vocation de cette Parcelle *
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAffectVocation('Agricole');
+                      setAffectTypeExploitation('Culture Végétale');
+                      setAffectStatut('En Culture');
+                    }}
+                    className={`p-3 rounded-xl border text-center transition font-bold text-xs flex flex-col items-center gap-1.5 ${
+                      affectVocation === 'Agricole'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-md'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="text-xl">🌱</span>
+                    <span>Culture Végétale</span>
+                    <span className="text-[9px] font-normal opacity-90">Vivrier & Maraîchage</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAffectVocation('Pastorale');
+                      setAffectTypeExploitation('Élevage / Pâturage');
+                      setAffectStatut('Pâturage Actif');
+                    }}
+                    className={`p-3 rounded-xl border text-center transition font-bold text-xs flex flex-col items-center gap-1.5 ${
+                      affectVocation === 'Pastorale'
+                        ? 'bg-amber-500 text-white border-amber-500 shadow-md'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="text-xl">🐄</span>
+                    <span>Production Animale</span>
+                    <span className="text-[9px] font-normal opacity-90">Pâturage & Élevage</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAffectVocation('Mixte');
+                      setAffectTypeExploitation('Agroforesterie');
+                      setAffectStatut('En Culture');
+                    }}
+                    className={`p-3 rounded-xl border text-center transition font-bold text-xs flex flex-col items-center gap-1.5 ${
+                      affectVocation === 'Mixte'
+                        ? 'bg-teal-600 text-white border-teal-600 shadow-md'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="text-xl">🌾</span>
+                    <span>Agro-Pastoral</span>
+                    <span className="text-[9px] font-normal opacity-90">Rotation Cultures/Bêtes</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAffectVocation('Réserve / Jachère');
+                      setAffectTypeExploitation('Non Allouée');
+                      setAffectStatut('En Jachère');
+                      setAffectTroupeau('');
+                    }}
+                    className={`p-3 rounded-xl border text-center transition font-bold text-xs flex flex-col items-center gap-1.5 ${
+                      affectVocation === 'Réserve / Jachère'
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="text-xl">💤</span>
+                    <span>Jachère / Libre</span>
+                    <span className="text-[9px] font-normal opacity-90">Repos ou Réserve</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Si Pastorale ou Mixte : Sélection ou Saisie du Troupeau */}
+              {(affectVocation === 'Pastorale' || affectVocation === 'Mixte') && (
+                <div className="p-3.5 bg-amber-50/60 rounded-xl border border-amber-200 space-y-3">
+                  <h4 className="font-extrabold text-amber-950 text-xs flex items-center gap-1.5">
+                    <span>🐄</span> Affectation du Cheptel / Troupeau
+                  </h4>
+
+                  {troupeaux && troupeaux.length > 0 && (
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">
+                        Sélectionner parmi vos troupeaux enregistrés dans le Module Production Animale :
+                      </label>
+                      <select
+                        value={affectTroupeau}
+                        onChange={(e) => setAffectTroupeau(e.target.value)}
+                        className="w-full border border-amber-300 rounded-lg p-2.5 bg-white font-semibold text-xs"
+                      >
+                        <option value="">-- Choisir un troupeau existant --</option>
+                        {troupeaux.map(tr => (
+                          <option key={tr.id} value={`${tr.nom} (${tr.espece} - ${tr.effectifTotal} têtes)`}>
+                            {tr.nom} • {tr.espece} ({tr.effectifTotal} têtes - {tr.localisation})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Ou saisir une désignation personnalisée :
+                    </label>
+                    <input
+                      type="text"
+                      value={affectTroupeau}
+                      onChange={(e) => setAffectTroupeau(e.target.value)}
+                      placeholder="Ex: Troupeau Bovins Goudali N°2 (45 têtes)"
+                      className="w-full border border-amber-300 rounded-lg p-2 bg-white text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Type d'Aménagement Pastoral
+                    </label>
+                    <select
+                      value={affectTypeExploitation}
+                      onChange={(e) => setAffectTypeExploitation(e.target.value as any)}
+                      className="w-full border border-amber-300 rounded-lg p-2 bg-white text-xs"
+                    >
+                      <option value="Élevage / Pâturage">Pâturage tournant clôturé avec abreuvoirs</option>
+                      <option value="Complexe Avicole/Porcin">Complexe Bâtiment Élevage (Volailles / Porcs)</option>
+                      <option value="Agroforesterie">Parcours ombragé / Pâturage sous verger</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Si Agricole : Info de plantation */}
+              {affectVocation === 'Agricole' && (
+                <div className="p-3.5 bg-emerald-50/60 rounded-xl border border-emerald-200 space-y-2">
+                  <h4 className="font-extrabold text-emerald-950 text-xs flex items-center gap-1.5">
+                    <span>🌱</span> Implantation Culturale
+                  </h4>
+                  <p className="text-slate-600 text-xs">
+                    Cette parcelle sera répertoriée comme terre agricole. Si aucune culture n'y est encore semée, vous pourrez y installer un nouveau cycle cultural via le bouton <strong>"+ Nouveau Cycle Cultural"</strong>.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-3 border-t">
+                <button 
+                  type="button" 
+                  onClick={() => setSelectedParcelForAffectation(null)} 
+                  className="bg-slate-100 p-2.5 px-4 rounded-lg text-slate-600 font-bold hover:bg-slate-200 transition"
+                >
+                  Annuler
+                </button>
+                <button 
+                  type="button" 
+                  onClick={handleSaveParcelAffectation}
+                  className="bg-emerald-700 hover:bg-emerald-800 text-white p-2.5 px-5 rounded-lg font-extrabold shadow-md transition"
+                >
+                  💾 Enregistrer la Vocation de la Parcelle
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: FICHE COMPLÈTE & HISTORIQUE COMPLET DES TRAVAUX ("CE QU'ON A FAIT DESSUS") */}
+      {selectedParcelForDetail && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-2xl w-full border shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+            {/* Header */}
+            <div className="bg-slate-900 text-white p-4.5 flex justify-between items-start">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-800">
+                    {selectedParcelForDetail.code}
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                    selectedParcelForDetail.vocation === 'Pastorale'
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-600/40'
+                      : selectedParcelForDetail.vocation === 'Mixte'
+                      ? 'bg-teal-500/20 text-teal-300 border border-teal-600/40'
+                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-600/40'
+                  }`}>
+                    {selectedParcelForDetail.vocation === 'Pastorale' ? '🐄 Production Animale / Élevage' : selectedParcelForDetail.vocation === 'Mixte' ? '🌾 Mixte Agro-Pastoral' : '🌱 Culture Végétale'}
+                  </span>
+                </div>
+                <h3 className="font-black text-lg text-white mt-1">
+                  {selectedParcelForDetail.nom}
+                </h3>
+                <p className="text-slate-400 text-xs">
+                  {(() => {
+                    const champParent = champs.find(c => c.id === selectedParcelForDetail.idChamp);
+                    return champParent ? `Domaine Foncier : ${champParent.nom} (${champParent.ville} • ${champParent.region || 'Cameroun'})` : 'Domaine foncier principal';
+                  })()}
+                </p>
+              </div>
+              <button 
+                onClick={() => setSelectedParcelForDetail(null)}
+                className="text-white hover:text-slate-300 text-base font-bold p-1 rounded-full hover:bg-slate-800 transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs overflow-y-auto">
+              {/* Carte Foncier & Caractéristiques Pédologiques */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Superficie</span>
+                  <span className="font-black text-slate-900 text-sm">{selectedParcelForDetail.surface} ha</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Type de Sol</span>
+                  <span className="font-bold text-slate-800">{selectedParcelForDetail.typeSol || 'Argilo-humifère'}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Potentiel Hydrogène (pH)</span>
+                  <span className="font-mono font-extrabold text-emerald-700">pH {selectedParcelForDetail.ph || 6.2}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Source d'Eau</span>
+                  <span className="font-bold text-slate-800">{selectedParcelForDetail.sourceEau || 'Forage motopompe'}</span>
+                </div>
+                <div className="col-span-2 pt-2 border-t border-slate-200">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Coordonnées GPS</span>
+                  <span className="font-mono text-slate-600">{selectedParcelForDetail.latitude || 4.1680}, {selectedParcelForDetail.longitude || 11.5340}</span>
+                </div>
+                <div className="col-span-2 pt-2 border-t border-slate-200">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Expertise & Diagnostic</span>
+                  <span className="text-slate-700 font-medium">{selectedParcelForDetail.expertDescription || 'Analyse préliminaire favorable'}</span>
+                </div>
+              </div>
+
+              {/* Affectation et Utilisation courante */}
+              <div className="p-3.5 rounded-xl border flex flex-wrap justify-between items-center gap-2 bg-emerald-50/40 border-emerald-200">
+                <div>
+                  <span className="text-[10px] font-bold text-emerald-800 uppercase block">Affectation Actuelle</span>
+                  {selectedParcelForDetail.vocation === 'Pastorale' ? (
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-base">🐄</span>
+                      <span className="font-extrabold text-slate-900 text-sm">
+                        {selectedParcelForDetail.troupeauAffecte || 'Troupeau en pâturage'}
+                      </span>
+                      <span className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded font-bold text-[10px]">
+                        Pâturage Actif
+                      </span>
+                    </div>
+                  ) : (() => {
+                    const activeCult = cultures.find(c => c.idParcelle === selectedParcelForDetail.id && c.statut === 'Active');
+                    return activeCult ? (
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-base">🌱</span>
+                        <span className="font-extrabold text-slate-900 text-sm">
+                          Culture de {activeCult.nom} ({activeCult.variete})
+                        </span>
+                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 rounded font-bold text-[10px]">
+                          En Végétation
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-slate-500 italic mt-0.5 block">
+                        💤 Parcelle actuellement en jachère ou en repos du sol.
+                      </span>
+                    );
+                  })()}
+                </div>
+
+                <button
+                  onClick={() => {
+                    setSelectedParcelForAffectation(selectedParcelForDetail);
+                    setAffectVocation(selectedParcelForDetail.vocation || 'Agricole');
+                    setAffectTroupeau(selectedParcelForDetail.troupeauAffecte || '');
+                    setSelectedParcelForDetail(null);
+                  }}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg transition text-xs flex items-center gap-1.5"
+                >
+                  🔄 Changer l'Affectation
+                </button>
+              </div>
+
+              {/* SECTION MAJEURE : "CE QU'ON A FAIT DESSUS" (REGISTRE COMPLET DES TRAVAUX) */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <h4 className="font-black text-slate-900 text-sm flex items-center gap-2">
+                    <span>🔨</span> Ce qu'on a fait dessus (Registre des Travaux & Récoltes)
+                  </h4>
+                  <button
+                    onClick={() => {
+                      setNewInterParcelle(selectedParcelForDetail.id);
+                      const activeCult = cultures.find(c => c.idParcelle === selectedParcelForDetail.id && c.statut === 'Active');
+                      if (activeCult) {
+                        setNewInterCulture(activeCult.id);
+                      }
+                      setShowAddIntervention(true);
+                      setSelectedParcelForDetail(null);
+                    }}
+                    className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg text-xs transition flex items-center gap-1"
+                  >
+                    + Enregistrer un Travail
+                  </button>
+                </div>
+
+                {(() => {
+                  const activeCult = cultures.find(c => c.idParcelle === selectedParcelForDetail.id && c.statut === 'Active');
+                  const pInterventions = interventions.filter(i => i.idParcelle === selectedParcelForDetail.id || (activeCult && i.idCulture === activeCult.id));
+                  const pRecoltes = recoltes.filter(r => r.idParcelle === selectedParcelForDetail.id || (activeCult && r.idCulture === activeCult.id));
+
+                  if (pInterventions.length === 0 && pRecoltes.length === 0) {
+                    return (
+                      <div className="p-6 text-center bg-slate-50 rounded-xl border border-dashed text-slate-400 italic">
+                        Aucun travail (labour, semis, traitement, pâture, récolte) n'a encore été consigné pour cette parcelle.
+                        <br />
+                        Cliquez sur "+ Enregistrer un Travail" ci-dessus pour documenter les travaux réalisés sur ce terrain.
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                      {/* Interventions */}
+                      {pInterventions.map((op) => (
+                        <div key={op.id} className="p-3 bg-white rounded-xl border border-slate-200 flex justify-between items-start text-xs shadow-3xs">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-slate-900">
+                                🚜 {op.type}
+                              </span>
+                              <span className="text-[10px] text-slate-500 font-mono">
+                                le {op.date}
+                              </span>
+                              <span className="px-1.5 py-0.2 bg-slate-100 text-slate-700 rounded text-[9px] font-bold">
+                                Par {op.responsable}
+                              </span>
+                            </div>
+                            {op.substanceIntrant && (
+                              <p className="text-slate-600 text-[11px] mt-1">
+                                Intrant appliqué : <strong className="text-slate-800">{op.substanceIntrant}</strong> ({op.quantiteIntrant} {op.uniteIntrant})
+                              </p>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <span className="font-mono font-extrabold text-slate-900 block">
+                              {op.mainDOeuvreCoût.toLocaleString()} FCFA
+                            </span>
+                            <span className="text-[10px] text-emerald-700 font-bold">
+                              {op.statut || 'Exécuté'}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Récoltes */}
+                      {pRecoltes.map((rec) => (
+                        <div key={rec.id} className="p-3 bg-amber-50/70 rounded-xl border border-amber-200 flex justify-between items-start text-xs shadow-3xs">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-amber-950">
+                                🌾 Récolte : {rec.quantiteKg.toLocaleString()} Kg
+                              </span>
+                              <span className="text-[10px] text-amber-800 font-mono">
+                                le {rec.date}
+                              </span>
+                              <span className="px-1.5 py-0.2 bg-amber-200 text-amber-900 rounded text-[9px] font-bold">
+                                Qualité {rec.qualite}
+                              </span>
+                            </div>
+                            <p className="text-amber-800 text-[11px] mt-1">
+                              Prix unitaire : {rec.prixUnitaireVenteKg} FCFA/Kg • Valeur : {(rec.quantiteKg * rec.prixUnitaireVenteKg).toLocaleString()} FCFA
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <div className="flex justify-end pt-3 border-t">
+                <button 
+                  type="button" 
+                  onClick={() => setSelectedParcelForDetail(null)} 
+                  className="bg-slate-800 hover:bg-slate-900 text-white font-extrabold px-5 py-2.5 rounded-lg transition"
+                >
+                  Fermer la Fiche Parcelle
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
