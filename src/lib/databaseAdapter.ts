@@ -159,12 +159,12 @@ export const ConvexAdapter: DatabaseBackendAdapter = {
 const BACKEND_STORAGE_KEY = 'mefoup_active_backend_provider';
 
 export const getPreferredBackend = (): BackendProviderType => {
+  // Priorité absolue : Convex.dev est la base cloud centrale pour Vercel et le multi-postes
+  if (isConvexConfigured()) return 'convex';
   const saved = localStorage.getItem(BACKEND_STORAGE_KEY) as BackendProviderType;
   if (saved && ['local', 'supabase', 'convex'].includes(saved)) {
     return saved;
   }
-  // Auto-détection de la meilleure cible disponible
-  if (isConvexConfigured()) return 'convex';
   if (isSupabaseConfigured()) return 'supabase';
   return 'local';
 };
@@ -188,43 +188,77 @@ export const getBackendAdapter = (provider?: BackendProviderType): DatabaseBacke
 
 /**
  * Service de persistance unifié
- * Appelé de façon transparente par l'application
+ * Appelé de façon transparente par l'application avec priorité Base de Données Cloud (Convex)
  */
 export const DataAdapterService = {
   async syncTenantDatabase(tenantId: string, db: TenantDatabase, operator?: string): Promise<DatabaseSyncResult> {
-    // 1. Sauvegarde systématique dans le cache local (sécurité hors-ligne)
-    await LocalStorageAdapter.syncTenantDatabase(tenantId, db, operator);
-
-    // 2. Synchronisation automatique sur le serveur central multi-postes
-    ServerSyncService.saveTenantDatabase(tenantId, db).catch(() => {});
-
-    // 3. Synchronisation sur le backend distant externe actif (Supabase, Convex...)
-    const activeProvider = getPreferredBackend();
-    if (activeProvider !== 'local') {
-      const remoteAdapter = getBackendAdapter(activeProvider);
-      if (remoteAdapter.isConfigured()) {
-        return await remoteAdapter.syncTenantDatabase(tenantId, db, operator);
+    // 1. PRIORITÉ ABSOLUE : Sauvegarde sur Convex Cloud (remplit tenant_backups ET erp_records)
+    if (isConvexConfigured()) {
+      try {
+        const convexRes = await ConvexSyncService.syncTenantDatabase(tenantId, db, 'Synchro Automatique Cloud', operator);
+        // Sauvegarde miroir locale en tâche de fond pour résilience hors-ligne
+        LocalStorageAdapter.syncTenantDatabase(tenantId, db, operator).catch(() => {});
+        ServerSyncService.saveTenantDatabase(tenantId, db).catch(() => {});
+        return {
+          success: true,
+          message: convexRes.message,
+          provider: 'convex',
+          details: convexRes,
+        };
+      } catch (err: any) {
+        console.warn('[DataAdapterService] Erreur synchro Convex:', err);
       }
     }
 
+    // 2. Si Supabase est sélectionné
+    const activeProvider = getPreferredBackend();
+    if (activeProvider === 'supabase') {
+      const remoteAdapter = getBackendAdapter('supabase');
+      if (remoteAdapter.isConfigured()) {
+        const res = await remoteAdapter.syncTenantDatabase(tenantId, db, operator);
+        LocalStorageAdapter.syncTenantDatabase(tenantId, db, operator).catch(() => {});
+        return res;
+      }
+    }
+
+    // 3. Fallback stockage local + serveur Express si disponible
+    await LocalStorageAdapter.syncTenantDatabase(tenantId, db, operator);
+    ServerSyncService.saveTenantDatabase(tenantId, db).catch(() => {});
+
     return {
       success: true,
-      message: 'Données enregistrées en stockage central et local.',
+      message: 'Données enregistrées en stockage local.',
       provider: 'local',
     };
   },
 
-  async logAudit(action: string, details: string, email?: string, tenantId?: string) {
-    // Log local
-    LocalStorageAdapter.logAudit({ action, details, email, tenantId });
-
-    // Log distant si configuré
-    const activeProvider = getPreferredBackend();
-    if (activeProvider !== 'local') {
-      const adapter = getBackendAdapter(activeProvider);
-      if (adapter.isConfigured()) {
-        adapter.logAudit({ action, details, email, tenantId }).catch(() => {});
+  async saveTenant(tenant: SaaSClient): Promise<{ success: boolean; message: string }> {
+    // 1. PRIORITÉ : Sauvegarde sur Convex Cloud
+    if (isConvexConfigured()) {
+      try {
+        await ConvexSyncService.saveTenant(tenant);
+      } catch (e) {
+        console.warn('[DataAdapterService] Erreur saveTenant Convex:', e);
       }
     }
+
+    // 2. Sauvegarde miroir local & serveur Express
+    await LocalStorageAdapter.saveTenant(tenant);
+    ServerSyncService.saveClient(tenant).catch(() => {});
+
+    return {
+      success: true,
+      message: 'Client sauvegardé sur la base de données centrale.',
+    };
+  },
+
+  async logAudit(action: string, details: string, email?: string, tenantId?: string) {
+    // Log Convex prioritaire
+    if (isConvexConfigured()) {
+      ConvexSyncService.logActivity({ action, details, email, tenantId }).catch(() => {});
+    }
+
+    // Log local
+    LocalStorageAdapter.logAudit({ action, details, email, tenantId });
   },
 };

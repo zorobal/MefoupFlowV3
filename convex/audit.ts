@@ -89,3 +89,44 @@ export const upsertTicket = mutationGeneric({
     }
   },
 });
+
+// Liste les factures d'abonnements SaaS de la plateforme
+export const listInvoices = queryGeneric({
+  args: { tenantId: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    if (args.tenantId) {
+      return await ctx.db
+        .query("saas_invoices")
+        .filter((q) => q.eq(q.field("tenantId"), args.tenantId))
+        .collect();
+    }
+    return await ctx.db.query("saas_invoices").collect();
+  },
+});
+
+// Crée ou met à jour une facture SaaS
+export const upsertInvoice = mutationGeneric({
+  args: {
+    invoiceId: v.string(),
+    clientName: v.string(),
+    tenantId: v.optional(v.string()),
+    plan: v.string(),
+    amount: v.number(),
+    date: v.string(),
+    method: v.string(),
+    status: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("saas_invoices")
+      .filter((q) => q.eq(q.field("invoiceId"), args.invoiceId))
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, args);
+      return existing._id;
+    } else {
+      return await ctx.db.insert("saas_invoices", args);
+    }
+  },
+});

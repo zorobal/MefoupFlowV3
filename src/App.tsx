@@ -176,6 +176,8 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { ServerSyncService } from './lib/serverSync';
+import { ConvexSyncService, isConvexConfigured, getConvexUrl } from './lib/convex';
+import { DataAdapterService } from './lib/databaseAdapter';
 
 export default function App() {
   // Helper to determine active tenant ID on start before hook evaluations
@@ -755,18 +757,68 @@ export default function App() {
     localStorage.setItem('erpTab', erpTab);
   }, [erpTab]);
 
-  // --- MULTI-COMPUTER CENTRAL SERVER SYNCHRONIZATION ---
+  // --- MULTI-COMPUTER CENTRAL & CLOUD (CONVEX) SYNCHRONIZATION ---
   const [serverConnected, setServerConnected] = useState<boolean>(true);
   const [isSyncingServer, setIsSyncingServer] = useState<boolean>(false);
   const [lastSyncTime, setLastSyncTime] = useState<string>('');
 
   const syncWithServer = async (isManual = false) => {
     setIsSyncingServer(true);
+    let cloudSynced = false;
     try {
+      // 1. PRIORITÉ ABSOLUE : Synchronisation avec la base Convex Cloud (accessible depuis Vercel et tous les postes)
+      if (isConvexConfigured()) {
+        try {
+          const convexTenants = await ConvexSyncService.fetchTenants();
+          if (Array.isArray(convexTenants) && convexTenants.length > 0) {
+            cloudSynced = true;
+            setServerConnected(true);
+            setLastSyncTime(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+
+            setSaasClients(prev => {
+              const map = new Map();
+              prev.forEach(c => map.set(c.id, c));
+              convexTenants.forEach(c => map.set(c.id, c));
+              const merged = Array.from(map.values());
+              localStorage.setItem('saasClients', JSON.stringify(merged));
+              return merged;
+            });
+
+            // Si un tenant actif est sélectionné, récupérer sa base depuis Convex
+            if (activeTenant?.id) {
+              const remoteDb = await ConvexSyncService.fetchLatestBackup(activeTenant.id);
+              if (remoteDb) {
+                setDatabases(prev => {
+                  const updated = { ...prev, [activeTenant.id]: remoteDb };
+                  localStorage.setItem('tenantDatabases', JSON.stringify(updated));
+                  return updated;
+                });
+              }
+            }
+          } else {
+            // Si Convex est vide, amorcer la base cloud avec les données actuelles
+            if (saasClients.length > 0) {
+              for (const client of saasClients) {
+                ConvexSyncService.saveTenant(client).catch(console.warn);
+                const db = databases[client.id];
+                if (db) {
+                  ConvexSyncService.syncTenantDatabase(client.id, db, 'Amorçage Convex Cloud', 'SuperAdmin').catch(console.warn);
+                }
+              }
+            }
+          }
+        } catch (convexErr) {
+          console.warn('[CONVEX-CLOUD] Erreur synchronisation cloud:', convexErr);
+        }
+      }
+
+      // 2. Synchronisation secondaire serveur Node (si disponible)
       const serverState = await ServerSyncService.fetchServerState();
       if (serverState) {
         setServerConnected(true);
-        setLastSyncTime(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+        if (!cloudSynced) {
+          setLastSyncTime(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+        }
 
         if (Array.isArray(serverState.saasClients) && serverState.saasClients.length > 0) {
           setSaasClients(prev => {
@@ -801,7 +853,6 @@ export default function App() {
             setSaasPlanConfigs(prev => ({ ...prev, ...serverState.saasPlanConfigs }));
           }
         } else {
-          // Push initial data to the central server so it is ready for other computers
           ServerSyncService.pushFullState({
             saasClients,
             databases,
@@ -809,12 +860,12 @@ export default function App() {
             saasPlanConfigs
           }).catch(console.warn);
         }
-      } else {
-        setServerConnected(false);
+      } else if (!cloudSynced) {
+        setServerConnected(isConvexConfigured());
       }
     } catch (err) {
       console.warn('[SERVER-SYNC] Erreur synchronisation:', err);
-      setServerConnected(false);
+      if (!cloudSynced) setServerConnected(false);
     } finally {
       setIsSyncingServer(false);
     }
@@ -1036,7 +1087,13 @@ export default function App() {
     };
     setSaasLogs(prev => [log, ...prev]);
 
-    // Push immediately to the central server so all other computers receive it
+    // PRIORITÉ ABSOLUE : Sauvegarde immédiate sur Convex Cloud (accessible partout sur Vercel et multi-postes)
+    if (isConvexConfigured()) {
+      ConvexSyncService.saveTenant(newClient).catch(console.warn);
+      ConvexSyncService.syncTenantDatabase(newClient.id, newDb, `Création ${newClient.raisonSociale}`, 'SaaS Admin').catch(console.warn);
+    }
+
+    // Push miroir vers le serveur central local
     ServerSyncService.saveClient(newClient, newDb, log).then(success => {
       if (success) {
         setLastSyncTime(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
@@ -1049,6 +1106,9 @@ export default function App() {
       const updated = prev.map(c => {
         if (c.id === clientId) {
           const u = { ...c, statut: status };
+          if (isConvexConfigured()) {
+            ConvexSyncService.saveTenant(u).catch(console.warn);
+          }
           ServerSyncService.saveClient(u).catch(console.warn);
           return u;
         }
@@ -1084,6 +1144,10 @@ export default function App() {
       statut: 'Succès'
     };
     setSaasLogs(prev => [log, ...prev]);
+
+    if (isConvexConfigured()) {
+      ConvexSyncService.saveTenant(updatedClient).catch(console.warn);
+    }
     ServerSyncService.saveClient(updatedClient, undefined, log).catch(console.warn);
   };
 
@@ -1095,6 +1159,10 @@ export default function App() {
     });
     if (activeTenant?.id === tenantId) {
       if (updatedDb.utilisateurs) setUtilisateurs(updatedDb.utilisateurs);
+    }
+
+    if (isConvexConfigured()) {
+      ConvexSyncService.syncTenantDatabase(tenantId, updatedDb, 'Mise à jour directe ERP', 'SuperAdmin').catch(console.warn);
     }
     ServerSyncService.saveTenantDatabase(tenantId, updatedDb).catch(console.warn);
   };
@@ -1660,7 +1728,62 @@ export default function App() {
       return;
     }
 
-    // 4. MULTI-POSTE: Si le client vient d'être créé sur un autre ordinateur, interroger le serveur central
+    // 4. MULTI-POSTES & VERCEL : Vérification PRIORITAIRE sur la base Convex Cloud
+    if (isConvexConfigured()) {
+      try {
+        const convexAuth = await ConvexSyncService.verifyCredentials(emailClean, passClean);
+        if (convexAuth && convexAuth.found) {
+          // Synchroniser les données cloud
+          await syncWithServer(true);
+
+          if (convexAuth.type === 'provider') {
+            setIsLoggedIn(true);
+            setAuthRole('provider');
+            setAppMode('saas-admin');
+            setCurrentUser(convexAuth.user);
+            return;
+          }
+
+          if (convexAuth.tenant) {
+            if (convexAuth.tenant.statut === 'Suspendu' || convexAuth.tenant.statut === 'Résilié') {
+              setSuspendedClientMessage(`Votre exploitation ou organisation a été suspendue.`);
+              return;
+            }
+
+            // Récupérer la dernière sauvegarde du tenant depuis Convex
+            const remoteDb = await ConvexSyncService.fetchLatestBackup(convexAuth.tenant.id);
+            if (remoteDb) {
+              setDatabases(prev => {
+                const u = { ...prev, [convexAuth.tenant.id]: remoteDb };
+                localStorage.setItem('tenantDatabases', JSON.stringify(u));
+                return u;
+              });
+            }
+
+            // S'assurer que le client est dans la liste locale
+            setSaasClients(prev => {
+              if (!prev.some(c => c.id === convexAuth.tenant.id)) {
+                const u = [...prev, convexAuth.tenant];
+                localStorage.setItem('saasClients', JSON.stringify(u));
+                return u;
+              }
+              return prev;
+            });
+
+            setIsLoggedIn(true);
+            setAuthRole('superadmin');
+            switchActiveTenant(convexAuth.tenant);
+            setAppMode('client-erp');
+            setCurrentUser(convexAuth.user);
+            return;
+          }
+        }
+      } catch (convexErr) {
+        console.warn('[Login Convex] Erreur vérification cloud:', convexErr);
+      }
+    }
+
+    // 5. MULTI-POSTE SECONDAIRE: Si le client vient d'être créé sur un autre ordinateur, interroger le serveur local
     try {
       const serverAuth = await ServerSyncService.verifyCredentials(emailClean, passClean);
       if (serverAuth && serverAuth.found) {
@@ -1692,7 +1815,7 @@ export default function App() {
       console.warn('Erreur vérification serveur:', err);
     }
 
-    setAuthError("Email ou mot de passe incorrect. Si ce compte vient d'être créé sur un autre ordinateur, cliquez sur 'Actualiser' ci-dessous.");
+    setAuthError("Email ou mot de passe incorrect. Si ce compte vient d'être créé sur un autre ordinateur, cliquez sur 'Actualiser (Convex Cloud)' ci-dessous.");
   };
 
   // Enters the evaluation/simulation trial mode with prefabricated structures
@@ -2392,10 +2515,10 @@ export default function App() {
                   </span>
                   <div>
                     <span className="text-emerald-950 font-bold block">
-                      {serverConnected ? 'Serveur Central Multi-Postes Connecté' : 'Mode Local (Non connecté)'}
+                      {isConvexConfigured() ? 'Base de Données Cloud (Convex) Connectée' : serverConnected ? 'Serveur Central Connecté' : 'Mode Local'}
                     </span>
                     <span className="text-[9.5px] text-emerald-700">
-                      {lastSyncTime ? `Dernière synchro : ${lastSyncTime}` : 'Synchronisation automatique active'}
+                      {lastSyncTime ? `Dernière synchro : ${lastSyncTime}` : 'Synchro temps réel multi-postes & Vercel active'}
                     </span>
                   </div>
                 </div>
@@ -2404,10 +2527,10 @@ export default function App() {
                   onClick={() => syncWithServer(true)}
                   disabled={isSyncingServer}
                   className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-800 hover:text-emerald-950 bg-emerald-100/90 hover:bg-emerald-200 px-2.5 py-1.5 rounded-lg transition cursor-pointer disabled:opacity-50 shadow-2xs"
-                  title="Synchroniser avec le serveur pour charger immédiatement les comptes créés sur un autre poste"
+                  title="Synchroniser avec Convex Cloud pour charger immédiatement les comptes créés sur un autre ordinateur"
                 >
                   <RefreshCw className={`h-3 w-3 ${isSyncingServer ? 'animate-spin' : ''}`} />
-                  <span>{isSyncingServer ? 'Synchro...' : 'Actualiser'}</span>
+                  <span>{isSyncingServer ? 'Synchro...' : 'Actualiser (Cloud)'}</span>
                 </button>
               </div>
 

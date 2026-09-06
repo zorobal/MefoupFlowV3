@@ -149,13 +149,53 @@ export default function SaaSAdmin({
     ];
   });
 
-  // Persist SaaS administration modules states
+  // Persist SaaS administration modules states & sync to Convex Cloud
+  React.useEffect(() => {
+    if (isConvexConfigured()) {
+      ConvexSyncService.fetchTickets().then(remoteTickets => {
+        if (remoteTickets && remoteTickets.length > 0) {
+          const formatted = remoteTickets.map(t => ({
+            id: t.ticketId || t.id,
+            clientId: t.tenantId || 'any',
+            clientName: t.clientName || 'Client Mefoup',
+            category: t.category || 'Technique',
+            title: t.title || 'Support',
+            desc: t.description || '',
+            priority: t.priority || 'Normale',
+            status: t.status || 'Nouveau',
+            date: t.date || new Date().toISOString().split('T')[0],
+            chat: t.chat || []
+          }));
+          setSaasTickets(formatted);
+        } else {
+          // Si vide sur Convex, sauvegarder les tickets initiaux vers Convex
+          saasTickets.forEach(t => ConvexSyncService.saveTicket(t));
+        }
+      }).catch(console.warn);
+
+      ConvexSyncService.fetchInvoices().then(remoteInvoices => {
+        if (remoteInvoices && remoteInvoices.length > 0) {
+          setSaasInvoices(remoteInvoices);
+        } else {
+          // Si vide sur Convex, sauvegarder les factures initiales vers Convex
+          saasInvoices.forEach(inv => ConvexSyncService.saveInvoice(inv));
+        }
+      }).catch(console.warn);
+    }
+  }, []);
+
   React.useEffect(() => {
     localStorage.setItem('saas_tickets', JSON.stringify(saasTickets));
+    if (isConvexConfigured()) {
+      saasTickets.forEach(t => ConvexSyncService.saveTicket(t));
+    }
   }, [saasTickets]);
 
   React.useEffect(() => {
     localStorage.setItem('saas_invoices', JSON.stringify(saasInvoices));
+    if (isConvexConfigured()) {
+      saasInvoices.forEach(inv => ConvexSyncService.saveInvoice(inv));
+    }
   }, [saasInvoices]);
 
   React.useEffect(() => {
@@ -367,8 +407,20 @@ CREATE POLICY "Contrôle complet admin factures" ON saas_invoices FOR ALL USING 
         });
       }
 
+      // 4. Sync support tickets to Convex (table saas_tickets)
+      setConvexSyncMessage(`Synchronisation de ${saasTickets.length} tickets vers Convex (saas_tickets)...`);
+      for (const ticket of saasTickets) {
+        await ConvexSyncService.saveTicket(ticket);
+      }
+
+      // 5. Sync invoices to Convex (table erp_records / saas_invoices)
+      setConvexSyncMessage(`Synchronisation de ${saasInvoices.length} factures vers Convex (saas_invoices)...`);
+      for (const invoice of saasInvoices) {
+        await ConvexSyncService.saveInvoice(invoice);
+      }
+
       setConvexSyncStatus('success');
-      setConvexSyncMessage('✅ Synchronisation Convex réussie ! Tous les tenants et partitions ERP sont synchronisés sans aucune erreur de contrainte SQL.');
+      setConvexSyncMessage('✅ Synchronisation Convex réussie ! Tous les tenants, partitions ERP (erp_records), tickets (saas_tickets) et factures (saas_invoices) sont synchronisés.');
     } catch (err: any) {
       console.error(err);
       setConvexSyncStatus('error');
