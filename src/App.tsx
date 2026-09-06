@@ -171,8 +171,11 @@ import {
   EyeOff,
   Download,
   HelpCircle,
-  Compass
+  Compass,
+  MapPin,
+  RefreshCw
 } from 'lucide-react';
+import { ServerSyncService } from './lib/serverSync';
 
 export default function App() {
   // Helper to determine active tenant ID on start before hook evaluations
@@ -535,6 +538,8 @@ export default function App() {
     return (localStorage.getItem('erpTab') as any) || 'dashboard';
   });
 
+  const [biSubTab, setBiSubTab] = useState<'dashboards' | 'terrains' | 'kpis' | 'query-builder' | 'scheduler' | 'alerts'>('terrains');
+
   // Multi-tenant ERP states
   const [exploitations, setExploitations] = useState<Exploitation[]>(initialDb.exploitations);
   const [sitesAgricoles, setSitesAgricoles] = useState<SiteAgricole[]>(initialDb.sitesAgricoles);
@@ -750,6 +755,91 @@ export default function App() {
     localStorage.setItem('erpTab', erpTab);
   }, [erpTab]);
 
+  // --- MULTI-COMPUTER CENTRAL SERVER SYNCHRONIZATION ---
+  const [serverConnected, setServerConnected] = useState<boolean>(true);
+  const [isSyncingServer, setIsSyncingServer] = useState<boolean>(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string>('');
+
+  const syncWithServer = async (isManual = false) => {
+    setIsSyncingServer(true);
+    try {
+      const serverState = await ServerSyncService.fetchServerState();
+      if (serverState) {
+        setServerConnected(true);
+        setLastSyncTime(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+
+        if (Array.isArray(serverState.saasClients) && serverState.saasClients.length > 0) {
+          setSaasClients(prev => {
+            const map = new Map();
+            prev.forEach(c => map.set(c.id, c));
+            serverState.saasClients.forEach(c => map.set(c.id, c));
+            const merged = Array.from(map.values());
+            localStorage.setItem('saasClients', JSON.stringify(merged));
+            return merged;
+          });
+
+          if (serverState.databases && Object.keys(serverState.databases).length > 0) {
+            setDatabases(prev => {
+              const merged = { ...prev, ...serverState.databases };
+              localStorage.setItem('tenantDatabases', JSON.stringify(merged));
+              return merged;
+            });
+          }
+
+          if (Array.isArray(serverState.saasLogs) && serverState.saasLogs.length > 0) {
+            setSaasLogs(prev => {
+              const map = new Map();
+              prev.forEach(l => map.set(l.id, l));
+              serverState.saasLogs.forEach(l => map.set(l.id, l));
+              const merged = Array.from(map.values());
+              localStorage.setItem('saasLogs', JSON.stringify(merged));
+              return merged;
+            });
+          }
+
+          if (serverState.saasPlanConfigs && Object.keys(serverState.saasPlanConfigs).length > 0) {
+            setSaasPlanConfigs(prev => ({ ...prev, ...serverState.saasPlanConfigs }));
+          }
+        } else {
+          // Push initial data to the central server so it is ready for other computers
+          ServerSyncService.pushFullState({
+            saasClients,
+            databases,
+            saasLogs,
+            saasPlanConfigs
+          }).catch(console.warn);
+        }
+      } else {
+        setServerConnected(false);
+      }
+    } catch (err) {
+      console.warn('[SERVER-SYNC] Erreur synchronisation:', err);
+      setServerConnected(false);
+    } finally {
+      setIsSyncingServer(false);
+    }
+  };
+
+  React.useEffect(() => {
+    syncWithServer();
+
+    // Auto-sync on window focus when user switches between windows/apps
+    const handleFocus = () => {
+      syncWithServer();
+    };
+    window.addEventListener('focus', handleFocus);
+
+    // Periodic synchronization every 10 seconds to detect new clients created on other computers
+    const syncInterval = setInterval(() => {
+      syncWithServer();
+    }, 10000);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(syncInterval);
+    };
+  }, []);
+
   React.useEffect(() => {
     // Sync active tenant states back into databases map dynamically, then persist databases to localStorage
     if (isSwitchingTenantRef.current) return;
@@ -945,10 +1035,28 @@ export default function App() {
       statut: 'Succès'
     };
     setSaasLogs(prev => [log, ...prev]);
+
+    // Push immediately to the central server so all other computers receive it
+    ServerSyncService.saveClient(newClient, newDb, log).then(success => {
+      if (success) {
+        setLastSyncTime(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      }
+    }).catch(console.warn);
   };
 
   const handleUpdateTenantStatus = (clientId: string, status: SaaSClient['statut']) => {
-    setSaasClients(prev => prev.map(c => c.id === clientId ? { ...c, statut: status } : c));
+    setSaasClients(prev => {
+      const updated = prev.map(c => {
+        if (c.id === clientId) {
+          const u = { ...c, statut: status };
+          ServerSyncService.saveClient(u).catch(console.warn);
+          return u;
+        }
+        return c;
+      });
+      localStorage.setItem('saasClients', JSON.stringify(updated));
+      return updated;
+    });
     
     // If the currently active customer's status became suspended, keep activeTenant in sync to lock views
     if (activeTenant.id === clientId) {
@@ -976,6 +1084,7 @@ export default function App() {
       statut: 'Succès'
     };
     setSaasLogs(prev => [log, ...prev]);
+    ServerSyncService.saveClient(updatedClient, undefined, log).catch(console.warn);
   };
 
   const handleUpdateTenantDatabase = (tenantId: string, updatedDb: TenantDatabase) => {
@@ -987,6 +1096,7 @@ export default function App() {
     if (activeTenant?.id === tenantId) {
       if (updatedDb.utilisateurs) setUtilisateurs(updatedDb.utilisateurs);
     }
+    ServerSyncService.saveTenantDatabase(tenantId, updatedDb).catch(console.warn);
   };
 
   // Restores all payload entities from a selected json file
@@ -1462,7 +1572,7 @@ export default function App() {
   };
 
   // Login handler
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
     setSuspendedClientMessage(null);
@@ -1505,7 +1615,7 @@ export default function App() {
 
     if (foundUser && foundTenant) {
       if (foundTenant.statut === 'Suspendu' || foundTenant.statut === 'Résilié') {
-        setSuspendedClientMessage(`Votre restaurant a été désactivé. Veuillez contacter l'administrateur de la plateforme.`);
+        setSuspendedClientMessage(`Votre exploitation ou coopérative a été désactivée. Veuillez contacter l'administrateur de la plateforme.`);
         return;
       }
       setIsLoggedIn(true);
@@ -1529,7 +1639,7 @@ export default function App() {
 
     if (matchedClient) {
       if (matchedClient.statut === 'Suspendu' || matchedClient.statut === 'Résilié') {
-        setSuspendedClientMessage(`Votre restaurant a été désactivé. Veuillez contacter l'administrateur de la plateforme.`);
+        setSuspendedClientMessage(`Votre exploitation ou coopérative a été désactivée. Veuillez contacter l'administrateur de la plateforme.`);
         return;
       }
       setIsLoggedIn(true);
@@ -1550,7 +1660,39 @@ export default function App() {
       return;
     }
 
-    setAuthError("Email ou mot de passe incorrect. Pour tester le logiciel, cliquez sur le bouton 'Version démonstration' à gauche.");
+    // 4. MULTI-POSTE: Si le client vient d'être créé sur un autre ordinateur, interroger le serveur central
+    try {
+      const serverAuth = await ServerSyncService.verifyCredentials(emailClean, passClean);
+      if (serverAuth && serverAuth.found) {
+        // Mettre à jour l'état local depuis le serveur pour cet ordinateur
+        await syncWithServer(true);
+
+        if (serverAuth.type === 'provider') {
+          setIsLoggedIn(true);
+          setAuthRole('provider');
+          setAppMode('saas-admin');
+          setCurrentUser(serverAuth.user);
+          return;
+        }
+
+        if (serverAuth.tenant) {
+          if (serverAuth.tenant.statut === 'Suspendu' || serverAuth.tenant.statut === 'Résilié') {
+            setSuspendedClientMessage(`Votre exploitation ou organisation a été suspendue.`);
+            return;
+          }
+          setIsLoggedIn(true);
+          setAuthRole('superadmin');
+          switchActiveTenant(serverAuth.tenant);
+          setAppMode('client-erp');
+          setCurrentUser(serverAuth.user);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('Erreur vérification serveur:', err);
+    }
+
+    setAuthError("Email ou mot de passe incorrect. Si ce compte vient d'être créé sur un autre ordinateur, cliquez sur 'Actualiser' ci-dessous.");
   };
 
   // Enters the evaluation/simulation trial mode with prefabricated structures
@@ -2241,8 +2383,36 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Multi-computer cloud sync indicator */}
+              <div className="mt-4 px-3.5 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-[11px]">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-2 w-2">
+                    <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${serverConnected ? 'bg-emerald-400' : 'bg-amber-400'} opacity-75`}></span>
+                    <span className={`relative inline-flex rounded-full h-2 w-2 ${serverConnected ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                  </span>
+                  <div>
+                    <span className="text-emerald-950 font-bold block">
+                      {serverConnected ? 'Serveur Central Multi-Postes Connecté' : 'Mode Local (Non connecté)'}
+                    </span>
+                    <span className="text-[9.5px] text-emerald-700">
+                      {lastSyncTime ? `Dernière synchro : ${lastSyncTime}` : 'Synchronisation automatique active'}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => syncWithServer(true)}
+                  disabled={isSyncingServer}
+                  className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-800 hover:text-emerald-950 bg-emerald-100/90 hover:bg-emerald-200 px-2.5 py-1.5 rounded-lg transition cursor-pointer disabled:opacity-50 shadow-2xs"
+                  title="Synchroniser avec le serveur pour charger immédiatement les comptes créés sur un autre poste"
+                >
+                  <RefreshCw className={`h-3 w-3 ${isSyncingServer ? 'animate-spin' : ''}`} />
+                  <span>{isSyncingServer ? 'Synchro...' : 'Actualiser'}</span>
+                </button>
+              </div>
+
               {/* Form elements */}
-              <form onSubmit={handleLoginSubmit} className="space-y-3.5 mt-5">
+              <form onSubmit={handleLoginSubmit} className="space-y-3.5 mt-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Adresse Email / Login *</label>
                   <input
@@ -2738,13 +2908,58 @@ export default function App() {
               )}
 
               {simulatedRole.modules.includes('bi-reporting') && (
-                renderSidebarTab('bi-reporting', 'BI & Rapports', <LineChart className="h-4 w-4 text-[#8CC63F] shrink-0" />)
+                <div>
+                  {renderSidebarTab('bi-reporting', 'BI & Rapports', <LineChart className="h-4 w-4 text-[#8CC63F] shrink-0" />)}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setErpTab('bi-reporting');
+                      setBiSubTab('terrains');
+                    }}
+                    className={`w-full text-left py-1.5 px-2 pl-7 rounded-lg transition text-[11px] font-bold flex items-center justify-between gap-1.5 cursor-pointer mt-0.5 ${
+                      erpTab === 'bi-reporting' && biSubTab === 'terrains'
+                        ? 'bg-[#1E7A44]/90 text-white border-l-2 border-[#8CC63F]'
+                        : 'hover:bg-[#0F3D2E] text-zinc-300 hover:text-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <MapPin className="h-3.5 w-3.5 text-[#8CC63F] shrink-0" />
+                      <span className="truncate">↳ Terrains & Foncier</span>
+                    </div>
+                    <span className="text-[8px] px-1.5 py-0.2 bg-[#8CC63F] text-[#0F3D2E] font-black rounded uppercase">
+                      Nouveau
+                    </span>
+                  </button>
+                </div>
               )}
 
               {(simulatedRole.modules.includes('agriculture') || simulatedRole.modules.includes('elevage') || simulatedRole.modules.includes('stocks') || simulatedRole.modules.includes('parc-materiel')) && (
                 <span className="block text-[10px] text-[#8CC63F] font-black px-3 py-1 uppercase tracking-widest pt-3">
                   Opérations Foncier
                 </span>
+              )}
+
+              {simulatedRole.modules.includes('bi-reporting') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setErpTab('bi-reporting');
+                    setBiSubTab('terrains');
+                  }}
+                  className={`w-full text-left p-2 rounded-lg transition text-xs font-bold flex items-center justify-between gap-1.5 cursor-pointer ${
+                    erpTab === 'bi-reporting' && biSubTab === 'terrains'
+                      ? 'bg-[#1E7A44] text-white shadow-xs border-l-4 border-[#8CC63F]'
+                      : 'hover:bg-[#0F3D2E] hover:text-white text-zinc-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <MapPin className="h-4 w-4 text-[#8CC63F] shrink-0" />
+                    <span className="truncate">Gestion Terrains (BI)</span>
+                  </div>
+                  <span className="text-[8.5px] px-1.5 py-0.2 bg-[#8CC63F] text-[#0F3D2E] font-black rounded uppercase">
+                    BI
+                  </span>
+                </button>
               )}
 
               {simulatedRole.modules.includes('agriculture') && (
@@ -2909,6 +3124,10 @@ export default function App() {
                   auditLogs={auditLogs}
                   meteo={currentWeather}
                   mouvementsStock={mouvementsStock}
+                  onNavigateToBI={(subTab) => {
+                    setErpTab('bi-reporting');
+                    if (subTab) setBiSubTab(subTab as any);
+                  }}
                 />
               )}
 
@@ -3118,11 +3337,15 @@ export default function App() {
 
               {erpTab === 'bi-reporting' && (
                 <BIModule
+                  initialSubTab={biSubTab}
                   exploitations={exploitations}
+                  champs={champs}
                   parcelles={parcelles}
                   cultures={cultures}
                   troupeaux={troupeaux}
                   animaux={animaux}
+                  interventions={interventions}
+                  recoltes={recoltes}
                   articles={articles}
                   piecesComptables={piecesComptables}
                   mouvementsStock={mouvementsStock}

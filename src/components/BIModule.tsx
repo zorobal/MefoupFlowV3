@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import {
   Exploitation,
+  Champ,
   Parcelle,
   Culture,
   Troupeau,
   Animal,
+  Intervention,
+  Recolte,
   Article,
   PieceComptable,
   MouvementStock,
@@ -50,16 +53,31 @@ import {
   Sliders,
   Sparkles,
   Inbox,
-  Sprout
+  Sprout,
+  MapPin,
+  Trees,
+  Compass,
+  Eye,
+  CheckCircle2,
+  Calculator,
+  SlidersHorizontal,
+  ChevronDown,
+  ChevronUp,
+  ArrowRight
 } from 'lucide-react';
+import TerrainsBIView from './TerrainsBIView';
 
 interface BIModuleProps {
+  initialSubTab?: 'dashboards' | 'terrains' | 'kpis' | 'query-builder' | 'scheduler' | 'alerts';
   // Read-only modules data sources
   exploitations: Exploitation[];
+  champs?: Champ[];
   parcelles: Parcelle[];
   cultures: Culture[];
   troupeaux: Troupeau[];
   animaux: Animal[];
+  interventions?: Intervention[];
+  recoltes?: Recolte[];
   articles: Article[];
   piecesComptables: PieceComptable[];
   mouvementsStock: MouvementStock[];
@@ -88,11 +106,15 @@ interface BIModuleProps {
 }
 
 export default function BIModule({
+  initialSubTab,
   exploitations = [],
+  champs = [],
   parcelles = [],
   cultures = [],
   troupeaux = [],
   animaux = [],
+  interventions = [],
+  recoltes = [],
   articles = [],
   piecesComptables = [],
   mouvementsStock = [],
@@ -119,10 +141,33 @@ export default function BIModule({
 }: BIModuleProps) {
   
   // BI core sub-tabs
-  const [biActiveTab, setBiActiveTab] = useState<'dashboards' | 'kpis' | 'query-builder' | 'scheduler' | 'alerts'>('dashboards');
+  const [biActiveTab, setBiActiveTab] = useState<'dashboards' | 'terrains' | 'kpis' | 'query-builder' | 'scheduler' | 'alerts'>(initialSubTab || 'dashboards');
+
+  React.useEffect(() => {
+    if (initialSubTab) {
+      setBiActiveTab(initialSubTab);
+    }
+  }, [initialSubTab]);
   
   // Current active dashboard template
   const [activeBoard, setActiveBoard] = useState<'pilotage' | 'vegetal' | 'elevage' | 'materiel' | 'comptes' | 'stocks'>('pilotage');
+  
+  // Terrains & Parcels BI sub-module states
+  const [terrainFilter, setTerrainFilter] = useState<string>('all');
+  const [vocationFilter, setVocationFilter] = useState<string>('all');
+  const [searchTerrainQuery, setSearchTerrainQuery] = useState<string>('');
+  const [simulationTerrainId, setSimulationTerrainId] = useState<string>('');
+  const [simulatedParcelSurface, setSimulatedParcelSurface] = useState<number>(3.5);
+  const [simulatedParcelVocation, setSimulatedParcelVocation] = useState<'Agricole' | 'Pastorale' | 'Mixte'>('Agricole');
+  const [selectedParcelDetail, setSelectedParcelDetail] = useState<Parcelle | null>(null);
+  const [expandedTerrains, setExpandedTerrains] = useState<Record<string, boolean>>({});
+
+  const toggleTerrainExpand = (champId: string) => {
+    setExpandedTerrains(prev => ({
+      ...prev,
+      [champId]: prev[champId] !== undefined ? !prev[champId] : false
+    }));
+  };
   
   // Search state inside references
   const [searchKpi, setSearchKpi] = useState('');
@@ -348,6 +393,7 @@ export default function BIModule({
       <div className="flex border-b border-slate-200 overflow-x-auto gap-2 scrollbar-none" id="bi-subtabs">
         {[
           { id: 'dashboards', label: 'Tableaux de Bord Thématiques', icon: LayoutGrid },
+          { id: 'terrains', label: 'Gestion des Terrains & Foncier', icon: MapPin, isNew: true },
           { id: 'kpis', label: 'Catalogue des Indicateurs (Règle 1)', icon: Layers },
           { id: 'query-builder', label: 'Constructeur Visuel de Requêtes', icon: FileSpreadsheet },
           { id: 'scheduler', label: 'Rapports Programmés', icon: Calendar },
@@ -366,7 +412,12 @@ export default function BIModule({
               }`}
             >
               <Icon className={`h-4 w-4 ${active ? 'text-indigo-600' : 'text-slate-400'}`} />
-              {tab.label}
+              <span>{tab.label}</span>
+              {tab.isNew && (
+                <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[9px] font-black uppercase tracking-wider border border-emerald-300">
+                  Nouveau
+                </span>
+              )}
             </button>
           );
         })}
@@ -376,9 +427,10 @@ export default function BIModule({
       {biActiveTab === 'dashboards' && (
         <div className="space-y-6">
           {/* THEMATIC NAV BUTTONS */}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 items-center">
             {[
               { id: 'pilotage', label: 'Pilotage Exploitation', color: 'indigo' },
+              { id: 'terrains', label: 'Gestion des Terrains & Foncier', color: 'emerald', isNew: true },
               { id: 'vegetal', label: 'Performance Cultures', color: 'emerald' },
               { id: 'elevage', label: 'Santé Élevage & Troupeau', color: 'rose' },
               { id: 'materiel', label: 'Parc Matériel & Fiabilité', color: 'amber' },
@@ -387,14 +439,27 @@ export default function BIModule({
             ].map(d => (
               <button
                 key={d.id}
-                onClick={() => setActiveBoard(d.id as any)}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-2xs transition ${
-                  activeBoard === d.id 
+                onClick={() => {
+                  if (d.id === 'terrains') {
+                    setBiActiveTab('terrains');
+                  } else {
+                    setActiveBoard(d.id as any);
+                  }
+                }}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-2xs transition flex items-center gap-1.5 cursor-pointer ${
+                  activeBoard === d.id && biActiveTab === 'dashboards'
                     ? 'bg-slate-800 text-white' 
+                    : d.isNew
+                    ? 'bg-emerald-50 text-emerald-800 border-2 border-emerald-500/50 hover:bg-emerald-100 font-bold'
                     : 'bg-white hover:bg-slate-100 border text-slate-600'
                 }`}
               >
                 {d.label}
+                {d.isNew && (
+                  <span className="px-1.5 py-0.2 bg-emerald-600 text-white rounded-full text-[9px] font-black uppercase">
+                    Nouveau
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -430,6 +495,34 @@ export default function BIModule({
                   <div className="text-xl font-bold text-slate-800 mt-1">{flt.availablePercent}%</div>
                   <div className="text-[10px] text-slate-500 mt-1">GMAO active</div>
                 </div>
+              </div>
+
+              {/* DISCOVERY BANNER TO TERRAINS SUB-MODULE */}
+              <div className="bg-gradient-to-r from-emerald-900 to-teal-950 p-4 rounded-xl border border-emerald-500/40 text-white flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-emerald-500 text-white rounded-xl shadow-xs shrink-0">
+                    <MapPin className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] uppercase font-black tracking-widest px-2 py-0.5 bg-[#8CC63F] text-[#0F3D2E] rounded-full">
+                        Nouveau Sous-Module BI
+                      </span>
+                      <span className="text-xs text-emerald-200 font-bold">Gestion des Terrains & Foncier</span>
+                    </div>
+                    <h4 className="text-sm font-black mt-0.5">Surveillance de l'Occupation Foncière & Simulateur d'Emprise</h4>
+                    <p className="text-xs text-emerald-100/80 mt-0.5">
+                      Visualisez la surface allouée par parcelle, la réserve restante sur chaque terrain, testez en direct la diminution de surface et explorez ce qui a été fait dessus (cultures végétales & races d'animaux en élevage).
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setBiActiveTab('terrains')}
+                  className="px-4 py-2 bg-[#8CC63F] hover:bg-[#7bb634] text-[#0F3D2E] font-black text-xs rounded-xl shadow-sm whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 shrink-0"
+                >
+                  <span>Ouvrir le Sous-Module</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
               </div>
 
               {/* INTEGRATED EXECUTIVE CHANTS */}
@@ -797,6 +890,19 @@ export default function BIModule({
           )}
 
         </div>
+      )}
+
+      {/* TAB CONTENT: GESTION DES TERRAINS & FONCIER */}
+      {biActiveTab === 'terrains' && (
+        <TerrainsBIView
+          champs={champs}
+          parcelles={parcelles}
+          cultures={cultures}
+          troupeaux={troupeaux}
+          animaux={animaux}
+          interventions={interventions}
+          recoltes={recoltes}
+        />
       )}
 
       {/* TAB CONTENT: 2. LOG OF UNIFORM KPIs CATALOGUE */}

@@ -319,6 +319,8 @@ export interface Animal {
   dateNaissance: string;
   statut: 'Actif' | 'Vendu' | 'Décédé' | 'Réformé';
   poidsActuel: number;
+  race?: string;
+  localisation?: string;
 }
 
 export interface ReproductionGestation {

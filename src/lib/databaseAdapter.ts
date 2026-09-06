@@ -1,6 +1,7 @@
 import { SaaSClient, TenantDatabase } from '../types';
 import { isSupabaseConfigured, SupabaseSyncService } from './supabase';
 import { isConvexConfigured, ConvexSyncService } from './convex';
+import { ServerSyncService } from './serverSync';
 
 /**
  * ARCHITECTURE EN COUCHE D'ABSTRACTION (DATABASE REPOSITORY / ADAPTER PATTERN)
@@ -194,7 +195,10 @@ export const DataAdapterService = {
     // 1. Sauvegarde systématique dans le cache local (sécurité hors-ligne)
     await LocalStorageAdapter.syncTenantDatabase(tenantId, db, operator);
 
-    // 2. Synchronisation sur le backend distant actif
+    // 2. Synchronisation automatique sur le serveur central multi-postes
+    ServerSyncService.saveTenantDatabase(tenantId, db).catch(() => {});
+
+    // 3. Synchronisation sur le backend distant externe actif (Supabase, Convex...)
     const activeProvider = getPreferredBackend();
     if (activeProvider !== 'local') {
       const remoteAdapter = getBackendAdapter(activeProvider);
@@ -205,7 +209,7 @@ export const DataAdapterService = {
 
     return {
       success: true,
-      message: 'Données enregistrées en stockage local.',
+      message: 'Données enregistrées en stockage central et local.',
       provider: 'local',
     };
   },

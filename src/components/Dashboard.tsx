@@ -59,6 +59,7 @@ interface DashboardProps {
   auditLogs: AuditLog[];
   meteo: PrevisionMeteo;
   mouvementsStock?: MouvementStock[];
+  onNavigateToBI?: (subTab?: string) => void;
 }
 
 export default function Dashboard({
@@ -71,7 +72,8 @@ export default function Dashboard({
   piecesComptables,
   auditLogs,
   meteo,
-  mouvementsStock = []
+  mouvementsStock = [],
+  onNavigateToBI
 }: DashboardProps) {
   // Aggregate KPIs
   const [filterTimestamp, setFilterTimestamp] = useState('');
@@ -188,13 +190,20 @@ export default function Dashboard({
       {/* 2. KPIs Section */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         {/* KPI 1 */}
-        <div className="bg-white p-4 rounded-xl border-2 border-[#1E7A44]/5 shadow-3xs flex items-center justify-between hover:border-[#1E7A44] transition-all">
+        <div 
+          onClick={() => onNavigateToBI?.('terrains')}
+          className="bg-white p-4 rounded-xl border-2 border-[#1E7A44]/5 shadow-3xs flex items-center justify-between hover:border-[#1E7A44] transition-all cursor-pointer group"
+          title="Cliquer pour ouvrir la Gestion des Terrains & Foncier (BI)"
+        >
           <div className="space-y-1">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Surface Cultivée</span>
-            <h3 className="text-xl font-bold text-slate-800">{totalSuperficie} Hectares</h3>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Surface Cultivée</span>
+              <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1 rounded group-hover:bg-[#8CC63F] group-hover:text-[#0F3D2E] transition-colors">BI →</span>
+            </div>
+            <h3 className="text-xl font-bold text-slate-800 group-hover:text-[#1E7A44] transition-colors">{totalSuperficie} Hectares</h3>
             <p className="text-[10px] text-slate-400">{totalParcelles} Parcelles enregistrées</p>
           </div>
-          <div className="p-3 bg-[#0F3D2E]/10 text-[#1E7A44] rounded-xl border border-[#1E7A44]/15">
+          <div className="p-3 bg-[#0F3D2E]/10 text-[#1E7A44] rounded-xl border border-[#1E7A44]/15 group-hover:bg-[#1E7A44] group-hover:text-white transition-colors">
             <Sprout className="h-6 w-6" />
           </div>
         </div>
@@ -236,6 +245,36 @@ export default function Dashboard({
             <Package className="h-6 w-6" />
           </div>
         </div>
+      </div>
+
+      {/* QUICK ACCESS TO GESTION DES TERRAINS & FONCIER BI */}
+      <div className="bg-gradient-to-r from-[#0F3D2E] via-[#1E7A44] to-[#2B2D30] text-white p-5 rounded-2xl border-2 border-[#8CC63F]/40 flex flex-col md:flex-row items-center justify-between gap-4 shadow-lg">
+        <div className="flex items-center gap-3.5">
+          <div className="p-3 bg-[#8CC63F] text-[#0F3D2E] rounded-xl shadow-md shrink-0">
+            <Milestone className="h-6 w-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] uppercase font-black tracking-widest px-2 py-0.5 bg-[#8CC63F] text-[#0F3D2E] rounded-full">
+                Nouveau Sous-Module BI
+              </span>
+              <span className="text-xs text-emerald-200 font-bold">Foncier & Occupation</span>
+            </div>
+            <h4 className="text-base font-black mt-0.5">Gestion des Terrains, Parcelles & Réserve Foncière</h4>
+            <p className="text-xs text-slate-200/90 mt-0.5 leading-relaxed">
+              Consultez la surface occupée par parcelle, la surface restante sur chaque terrain, testez en direct la diminution de surface avec le simulateur d'emprise et analysez les activités (cultures végétales et races d'élevage).
+            </p>
+          </div>
+        </div>
+        {onNavigateToBI && (
+          <button
+            onClick={() => onNavigateToBI('terrains')}
+            className="px-4 py-2.5 bg-[#8CC63F] hover:bg-[#7bb634] text-[#0F3D2E] font-black text-xs rounded-xl shadow-md whitespace-nowrap transition cursor-pointer flex items-center gap-2 shrink-0"
+          >
+            <span>Ouvrir Gestion des Terrains (BI)</span>
+            <ArrowUpRight className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {/* 3. Recharts Graphics Rows */}
